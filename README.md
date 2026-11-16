@@ -115,7 +115,8 @@ ecommerce-behavior-analysis/
 │   ├── data_quality.py                     # Kiểm toán chất lượng dữ liệu
 │   ├── robustness.py                       # Kiểm định an toàn và độ nhạy
 │   ├── regression_evaluation.py            # CV, metrics, OLS diagnostics
-│   └── fairness_evaluation.py              # Kiểm toán fairness tổng hợp
+│   ├── fairness_evaluation.py              # Kiểm toán fairness tổng hợp
+│   └── fairness_reference.py               # Khóa nguồn và metric tham chiếu
 ├── tests/
 │   ├── test_data_contract.py                # Kiểm thử dữ liệu và đặc trưng
 │   ├── test_classification_contract.py      # Kiểm thử cutoff/preprocessor
@@ -260,9 +261,9 @@ Bộ test kiểm tra dữ liệu đầu vào, feature, preprocessor, ranh giới
 
 ### Bước 8. Ethics, Fairness & Bias
 
-Mở [06_ethics_and_bias.ipynb](notebooks/06_ethics_and_bias.ipynb), Restart Kernel & Run All. Đọc lại raw, làm sạch/tích hợp trong bộ nhớ và tái tạo đúng 3 cutoff; tái fit Random Forest và Dummy median đã khóa trong các bước Classification và Regression, tái tạo ngưỡng F1 **chỉ trên validation**. Không chọn lại mô hình, không dùng test để điều chỉnh. Báo cáo UK/International/Unknown, ngưỡng n≥30 và denominator≥10 cho Classification; metric thiếu điều kiện là N/A. Chỉ xuất tổng hợp, không lưu dự báo cấp khách.
+Mở [06_ethics_and_bias.ipynb](notebooks/06_ethics_and_bias.ipynb), Restart Kernel & Run All. Đọc lại raw, làm sạch/tích hợp trong bộ nhớ và tái tạo đúng 3 cutoff; tái fit Random Forest và Dummy median đã khóa trong các bước Classification và Regression, tái tạo ngưỡng F1 **chỉ trên validation**. Không chọn lại mô hình, không dùng test để điều chỉnh. Báo cáo theo hai nhóm UK và Non-UK / Unknown (gộp International và Unknown). Nếu một nhóm có n<30, ẩn cả hai nhóm; Classification cũng ẩn metric cả hai nếu support của lớp thực/dự báo của một nhóm <10. Metric thiếu điều kiện là N/A. Chỉ xuất tổng hợp, không lưu dự báo cấp khách.
 
-Kết quả tạo `reports/w12_*.csv` (ignored) và cập nhật khối kết quả trong [Datasheet](docs/datasheet.md), [Model Card Classification](docs/model_card_classification.md), [Model Card Regression](docs/model_card_regression.md). Kiểm tra kết quả notebook và nội dung ba tài liệu sau khi chạy lại. Nguồn gốc, điều khoản, robots.txt, consent và chính sách lưu giữ có các mục chưa xác minh; nhóm phải xác nhận thủ công những mục đó trước khi nộp, không đánh dấu hoàn thành giả tạo.
+Kết quả tạo `reports/w12_*.csv` (ignored) và cập nhật khối kết quả trong [Datasheet](docs/datasheet.md), [Model Card Classification](docs/model_card_classification.md), [Model Card Regression](docs/model_card_regression.md). Chỉ cập nhật tài liệu khi fingerprint dữ liệu, source, phiên bản thư viện tính toán và toàn bộ metric tham chiếu của winner khớp. Kiểm tra log `Reference checks: PASS` và ba tài liệu sau khi chạy lại. Nguồn gốc, điều khoản, robots.txt, consent và chính sách lưu giữ có các mục chưa xác minh; nhóm phải xác nhận thủ công những mục đó trước khi nộp, không đánh dấu hoàn thành giả tạo.
 
 ## 7. Kết quả phân tích hiện tại
 
@@ -326,7 +327,7 @@ Dummy median dự báo 0 GBP mọi khách; không khuyến nghị dùng để d�
 
 ### 7.6. Đạo đức, sai lệch và quyền riêng tư
 
-Trên tập test 5.225 khách, nhóm UK có 4.773 khách, International có 445 khách và Unknown có 7 khách. Recall của Classification lần lượt là 59,87% và 68,10% ở hai nhóm đủ cỡ mẫu; MAE của Regression là 467,84 GBP và 1.032,93 GBP. Không công bố metric của nhóm Unknown vì cỡ mẫu nhỏ. Thử nghiệm tổng quát hóa và suppression đạt k tối thiểu bằng 10 trên bộ quasi-identifier được chọn, giữ lại 5.053 khách; không thay đổi tập đánh giá mô hình và không chứng minh dữ liệu gốc đã ẩn danh.
+Trên tập test 5.225 khách, UK có 4.773 khách và Non-UK / Unknown có 452 khách. Quy tắc công bố gộp nhóm nhỏ để tránh suy ngược từ Overall và International; không thay đổi tập test hay mô hình. Các metric nhóm gộp cần tái tính từ notebook 06, không lấy từ bảng International cũ. Thử nghiệm tổng quát hóa và suppression đạt k tối thiểu bằng 10 trên bộ quasi-identifier được chọn, giữ lại 5.053 khách; không thay đổi tập đánh giá mô hình và không chứng minh dữ liệu gốc đã ẩn danh.
 
 Xem kết quả và giới hạn chi tiết tại [Datasheet](docs/datasheet.md), [Model Card Classification](docs/model_card_classification.md) và [Model Card Regression](docs/model_card_regression.md).
 

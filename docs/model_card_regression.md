@@ -6,17 +6,16 @@
 
 **Kết quả W10 đã nghiệm thu:** median dummy dự báo £0 mọi khách, test MAE £515,34, RMSE £3.144,94, R² −0,0276. OLS R² 0,1127; Ridge MAE £484,85 trên test nhưng không được chọn lại. Không đổi winner dựa trên test. Tỷ lệ zero 57,21% test. OLS diagnostics cho thấy residual không chuẩn, phương sai không đều; HC3 không giải quyết mọi vi phạm. Không suy diễn nhân quả.
 
-**Fairness:** MAE (metric chọn model) và mean error = actual − predicted theo thị trường; positive là dự báo thiếu. RMSE để thấy sai số lớn, R² N/A khi target hằng; so sánh cả mean actual/zero share để hiểu chênh lệch nền. Nhóm theo modal địa lý lịch sử như W11; n<30 không báo metric. Chênh lệch Intl − UK không chứng minh phân biệt đối xử, và không có chuẩn fairness cho mọi nhóm. Bảng đầy đủ notebook 06.
+**Fairness:** MAE (metric chọn model) và mean error = actual − predicted theo thị trường; positive là dự báo thiếu. RMSE để thấy sai số lớn, R² N/A khi target hằng; so sánh cả mean actual/zero share để hiểu chênh lệch nền. Nhóm theo modal địa lý lịch sử; công bố UK và Non-UK / Unknown (gộp International và Unknown). Nếu một nhóm n<30, ẩn cả hai nhóm. Gap nhóm gộp − UK không chứng minh phân biệt đối xử. Không công bố International riêng trong báo cáo mới; lịch sử Git vẫn có kết quả cũ. Bảng đầy đủ notebook 06.
 
 <!-- W12_RESULTS_START -->
-W12 temporal test (đúng CSV tham chiếu); gap MAE Intl − UK +565.09 GBP.
+Temporal test đã xác thực; gap MAE Non-UK / Unknown − UK +549.10 GBP.
 
 | Nhóm | n | mae_gbp | rmse_gbp | r2 | mean_error_gbp |
 | --- | --- | --- | --- | --- | --- |
 | Overall | 5225 | 515.3416 | 3144.9414 | -0.0276 | 515.3416 |
 | UK | 4773 | 467.8408 | 2787.4855 | -0.0290 | 467.8408 |
-| International | 445 | 1032.9346 | 5726.3650 | -0.0336 | 1032.9346 |
-| Unknown | 7 | N/A | N/A | N/A | N/A |
+| Non-UK / Unknown | 452 | 1016.9378 | 5681.8507 | -0.0331 | 1016.9378 |
 <!-- W12_RESULTS_END -->
 
 **Không khuyến nghị triển khai:** winner không phân biệt được mức chi tiêu, dự báo tổng £0 cũng không phù hợp để lập kế hoạch doanh thu/phân khúc. Chỉ baseline nghiên cứu, không quyết định quyền lợi từng khách. Cần cải tiến và kiểm tra dữ liệu ngoài thời gian đã xem, coverage nhóm, drift và chi phí sai số. Không công bố dự báo cấp khách.

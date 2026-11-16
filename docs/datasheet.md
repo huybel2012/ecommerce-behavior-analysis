@@ -20,12 +20,12 @@
 - Phân tích toàn kỳ có 5.853 khách mua; test là 5.225 khách đã mua trước cutoff 01/09/2011. Không đồng nhất hai population. W12 đo thành phần snapshot riêng, nhóm dựa trên vùng modal trước cutoff, không dùng nhãn địa lý toàn kỳ.
 
 ## Quyền riêng tư, lưu giữ và phạm vi
-Customer ID/Invoice là mã liên kết, không phải bằng chứng ẩn danh; timestamp, quốc gia, số lượng, giá và tổ hợp hành vi có thể tái định danh. Không thu thập thêm PII, không nối nguồn ngoài để nhận diện cá nhân. Giữ mã nội bộ để tạo profile/target, không đưa vào feature hoặc output công khai. `.gitignore` loại raw và CSV/Parquet; chỉ công bố tổng hợp, không công bố bảng cấp khách hoặc nhóm metric quá nhỏ. Lịch sử Git cũ có thể còn mẫu ID/hóa đơn; không rewrite lịch sử, không khẳng định đã xóa các bản sao.
+Customer ID/Invoice là mã liên kết, không phải bằng chứng ẩn danh; timestamp, quốc gia, số lượng, giá và tổ hợp hành vi có thể tái định danh. Không thu thập thêm PII, không nối nguồn ngoài để nhận diện cá nhân. Giữ mã nội bộ để tạo profile/target, không đưa vào feature hoặc output công khai. `.gitignore` loại raw và CSV/Parquet; chỉ công bố tổng hợp, không công bố bảng cấp khách hoặc nhóm metric quá nhỏ. Báo cáo fairness mới dùng UK và Non-UK / Unknown, ẩn cả hai nhóm nếu một nhóm quá nhỏ để hạn chế suy ngược từ thống kê Overall. Kết quả International riêng đã công bố trong lịch sử Git có thể vẫn cho phép đối chiếu; biện pháp mới không thu hồi được bản cũ. Lịch sử Git cũ có thể còn mẫu ID/hóa đơn; không rewrite lịch sử, không khẳng định đã xóa các bản sao.
 
 **Kiểm tra k:** notebook 06 tính k tối thiểu theo distinct customer trên test snapshot với bộ quasi-ID (region, recency, frequency, gross lịch sử); sau đó tổng quát hóa thành UK/International/Unknown, recency ≤30/90/180/>180 ngày, frequency ≤1/3/10/>10, gross ≤100/500/2000/>2000 GBP, loại lớp tương đương có n<10. Chỉ công bố số tổng hợp, không xuất microdata tổng quát hóa. k là phép đo trên bộ quasi-ID giả định, không chứng minh ẩn danh dữ liệu gốc hay chống mọi tấn công (ví dụ homogeneous class). Privacy audit không thay đổi mẫu đánh giá mô hình. Kết quả được ghi tự động khi chạy notebook trên dữ liệu thật.
 
 <!-- W12_RESULTS_START -->
-W12: mô phỏng generalize/suppress trên test; không công bố bảng khách và không khẳng định dữ liệu gốc ẩn danh.
+Mô phỏng generalize/suppress trên test; không công bố bảng khách, không khẳng định dữ liệu gốc ẩn danh.
 
 | Nhóm | customers | suppressed | k_min | customers_below_k | k_target |
 | --- | --- | --- | --- | --- | --- |

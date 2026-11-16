@@ -8,6 +8,8 @@ from src.pipeline import unknown_country_mask
 MIN_GROUP = 30
 MIN_SUPPORT = 10
 MARKETS = ('UK', 'International', 'Unknown')
+PUBLIC_OTHER = 'Non-UK / Unknown'
+PUBLIC_MARKETS = ('UK', PUBLIC_OTHER)
 
 
 def market_groups(snapshot):
@@ -19,6 +21,14 @@ def market_groups(snapshot):
 
 
 def _inputs(y, pred, groups):
+    # Series are keyed observations, not interchangeable positional vectors.
+    keyed = [isinstance(value, pd.Series) for value in (y, pred, groups)]
+    if any(keyed):
+        if not all(keyed):
+            raise ValueError('Use three aligned Series or three positional vectors, not a mixture.')
+        if (isinstance(y.index, pd.MultiIndex) or not y.index.is_unique or y.index.hasnans
+                or not y.index.equals(pred.index) or not y.index.equals(groups.index)):
+            raise ValueError('Require identical unique nonmissing observation indexes in the same order.')
     y, pred, groups = np.asarray(y, dtype=float), np.asarray(pred, dtype=float), np.asarray(groups)
     if y.ndim != 1 or y.shape != pred.shape or y.shape != groups.shape or not len(y):
         raise ValueError('Require aligned nonempty one-dimensional vectors.')
@@ -27,19 +37,61 @@ def _inputs(y, pred, groups):
     return y, pred, groups
 
 
-def _slices(groups):
+def _slices(groups, public):
     yield 'Overall', np.ones(len(groups), dtype=bool)
-    for name in MARKETS:
-        yield name, groups == name
+    if public:
+        # Fixed, disjoint exhaustive partition: never release International separately
+        # from the pooled complement in the same reporting workflow.
+        yield 'UK', groups == 'UK'
+        yield PUBLIC_OTHER, groups != 'UK'
+    else:
+        for name in MARKETS:
+            yield name, groups == name
 
 
-def classification_by_group(y, prob, groups, threshold):
-    """Rates withheld for n<30 or relevant denominator<10; no threshold fitting."""
+def public_representation(snapshots):
+    """Same fixed partition as the public model tables at every cutoff."""
+    result = {}
+    for role, snapshot in snapshots.items():
+        groups = market_groups(snapshot)
+        counts = pd.Series({'UK': int(groups.eq('UK').sum()),
+                            PUBLIC_OTHER: int(groups.ne('UK').sum())}, dtype=float)
+        # Do not release just the complementary count when one group is tiny.
+        if (counts < MIN_GROUP).any():
+            counts[:] = np.nan
+        result[role] = counts
+    return pd.DataFrame(result).rename_axis('market')
+
+
+def _public_suppression(table, *, classification=False):
+    """Keep Overall; withhold both public subgroups if one cannot be disclosed.
+
+    Avoid recovery of a withheld group's additive statistics via Overall minus
+    the other public group. Classification also guards both actual and predicted
+    class support. This is a release policy, not a proof of anonymity.
+    """
+    subgroup = table.loc[list(PUBLIC_MARKETS)]
+    small = subgroup.n.lt(MIN_GROUP).any()
+    insufficient = False
+    if classification and not small:
+        selected = (subgroup.selection_rate * subgroup.n).round()
+        insufficient = (subgroup[['positive_support', 'negative_support']].min().min() < MIN_SUPPORT
+                        or selected.min() < MIN_SUPPORT
+                        or (subgroup.n-selected).min() < MIN_SUPPORT)
+    if small or insufficient:
+        cols = [c for c in table.columns if c != 'status' and (small or c not in ('n','share'))]
+        table.loc[list(PUBLIC_MARKETS), cols] = np.nan
+        table.loc[list(PUBLIC_MARKETS), 'status'] = 'paired suppression: small group/support'
+    return table
+
+
+def classification_by_group(y, prob, groups, threshold, *, public=True):
+    """Public by default; public=False is for private diagnostics only."""
     y, prob, groups = _inputs(y, prob, groups)
     if not np.isin(y, [0, 1]).all() or ((prob < 0) | (prob > 1)).any() or not 0 <= threshold <= 1:
         raise ValueError('Invalid binary evaluation inputs.')
     rows = []
-    for name, mask in _slices(groups):
+    for name, mask in _slices(groups, public):
         a, p = y[mask], prob[mask]
         n = len(a)
         pred = p >= threshold
@@ -59,16 +111,17 @@ def classification_by_group(y, prob, groups, threshold):
                          roc_auc=roc_auc_score(a,p) if both else np.nan,
                          average_precision=average_precision_score(a,p) if both else np.nan,
                          status='n<30: suppressed' if not enough else ('limited class support' if not both else 'descriptive')))
-    return pd.DataFrame(rows).set_index('market')
+    table = pd.DataFrame(rows).set_index('market')
+    return _public_suppression(table, classification=True) if public else table
 
 
-def regression_by_group(y, pred, groups):
+def regression_by_group(y, pred, groups, *, public=True):
     """Positive mean_error_gbp = underprediction (actual minus predicted)."""
     y, pred, groups = _inputs(y, pred, groups)
     if (y < 0).any() or (pred < 0).any():
         raise ValueError('Expected nonnegative gross GBP.')
     rows = []
-    for name, mask in _slices(groups):
+    for name, mask in _slices(groups, public):
         a, p = y[mask], pred[mask]
         n = len(a)
         enough = n >= MIN_GROUP
@@ -79,12 +132,14 @@ def regression_by_group(y, pred, groups):
                          mean_predicted_gbp=float(np.mean(p)) if enough else np.nan,
                          zero_share=float(np.mean(a==0)) if enough else np.nan,
                          status='descriptive' if enough else 'n<30: suppressed'))
-    return pd.DataFrame(rows).set_index('market')
+    table = pd.DataFrame(rows).set_index('market')
+    return _public_suppression(table) if public else table
 
 
 def signed_gap(table, metric):
-    """International minus UK; NaN when either metric is unavailable."""
-    return float(table.loc['International', metric] - table.loc['UK', metric])
+    """Pooled non-UK/Unknown minus UK for public tables; private Intl minus UK otherwise."""
+    other = PUBLIC_OTHER if PUBLIC_OTHER in table.index else 'International'
+    return float(table.loc[other, metric] - table.loc['UK', metric])
 
 
 def country_selection(country_table):
@@ -142,12 +197,24 @@ def markdown_table(frame, columns):
     return '\n'.join('| '+' | '.join(r)+' |' for r in rows)
 
 
-def update_card(path, table, columns, note):
-    """Idempotently replace only the aggregate results block in a model card."""
+def render_card(path, table, columns, note):
+    """Validate markers and render without mutating the file."""
     start, end = '<!-- W12_RESULTS_START -->', '<!-- W12_RESULTS_END -->'
     text = path.read_text(encoding='utf-8')
     if text.count(start)!=1 or text.count(end)!=1 or text.index(start)>text.index(end):
         raise ValueError('Invalid model card markers.')
     before, rest = text.split(start)
     _, after = rest.split(end)
-    path.write_text(before+start+'\n'+note+'\n\n'+markdown_table(table, columns)+'\n'+end+after, encoding='utf-8')
+    return before+start+'\n'+note+'\n\n'+markdown_table(table, columns)+'\n'+end+after
+
+
+def update_card(path, table, columns, note):
+    """Idempotently replace only the aggregate results block in a model card."""
+    path.write_text(render_card(path, table, columns, note), encoding='utf-8')
+
+
+def update_cards(updates):
+    """Validate every document before any write (no partial write on bad markers)."""
+    rendered = [(path, render_card(path, table, cols, note)) for path, table, cols, note in updates]
+    for path, text in rendered:
+        path.write_text(text, encoding='utf-8')
