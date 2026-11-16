@@ -78,6 +78,19 @@ def get_peak_season_calendar() -> pd.DataFrame:
 RAW_COLUMNS = ["Invoice", "StockCode", "Description", "Quantity", "InvoiceDate", "Price", "Customer ID", "Country"]
 
 
+NON_PRODUCT_CODES = [
+    "POST", "D", "M", "BANK CHARGES", "AMAZONFEE", "DOT",
+    "CRUK", "S", "B", "ADJUST", "ADJUST2", "TEST001", "TEST002"
+]
+
+
+UNKNOWN_COUNTRIES = {"", "unspecified", "unknown", "nan", "none", "n/a", "null", "european community"}
+
+def unknown_country_mask(values):
+    normalized = values.astype("string").str.strip().str.lower()
+    return normalized.isna() | normalized.isin(UNKNOWN_COUNTRIES)
+
+
 def validate_raw_data(df: pd.DataFrame, source: str) -> pd.DataFrame:
     """Kiểm tra schema và kiểu dữ liệu trước khi làm sạch; cho phép thiếu CID/mô tả."""
     if df.empty or df.columns.has_duplicates or set(df.columns) != set(RAW_COLUMNS):
@@ -171,28 +184,25 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     df["country_original"] = df["country"]
 
     # 5. Suy diễn quốc gia 'Unspecified' theo lịch sử từng khách hàng
-    n_unspec = (df["country"] == "Unspecified").sum()
-    if n_unspec > 0:
-        cid_country = (
-            df[df["country"] != "Unspecified"]
-            .groupby("customer_id")["country"]
-            .agg(lambda s: s.mode().iloc[0])
-        )
-        df["country"] = df.apply(
-            lambda r: cid_country.get(r["customer_id"], "Unspecified")
-            if r["country"] == "Unspecified" else r["country"],
-            axis=1,
-        )
-    add_log("1.5", "country", f"{n_unspec:,} dòng có giá trị 'Unspecified'",
-            "Điền theo quốc gia phổ biến nhất của cùng customer_id",
-            n_unspec, "Khôi phục thông tin địa lý từ các đơn hàng khác của cùng khách")
+    unknown_before = unknown_country_mask(df["country"])
+    # Chỉ nội suy các quốc gia chưa xác định; nguồn ứng viên phải là quốc gia đã biết.
+    needs_country = df.loc[unknown_before, "customer_id"].unique()
+    candidate_rows = df.loc[~unknown_before & df["customer_id"].isin(needs_country)]
+    candidates = candidate_rows.groupby("customer_id")["country"].agg(lambda s: s.mode().iloc[0])
+    replacements = df.loc[unknown_before, "customer_id"].map(candidates)
+    restored = replacements.dropna()
+    df.loc[restored.index, "country"] = restored
+    n_restored = len(restored)
+    n_unresolved = int(unknown_country_mask(df["country"]).sum())
+    add_log("1.5", "country", f"{int(unknown_before.sum()):,} dòng chưa xác định; khôi phục {n_restored:,}",
+            "Điền theo quốc gia đã biết phổ biến nhất của cùng customer_id (chỉ mô tả)",
+            n_restored, "Rows = số dòng thực sự được khôi phục")
+    add_log("1.5a", "country", f"{n_unresolved:,} dòng vẫn chưa xác định",
+            "Giữ nguyên quốc gia gốc chưa xác định; gán Unknown khi merge",
+            n_unresolved, "Rows = số dòng chưa khôi phục tại bước này, trước lọc phi sản phẩm")
 
     # 6. Loại bỏ mã phi sản phẩm
-    non_prod = [
-        "POST", "D", "M", "BANK CHARGES", "AMAZONFEE", "DOT",
-        "CRUK", "S", "B", "ADJUST", "ADJUST2", "TEST001", "TEST002"
-    ]
-    mask_non_prod = df["stockcode"].str.upper().isin(non_prod)
+    mask_non_prod = df["stockcode"].str.upper().isin(NON_PRODUCT_CODES)
     df = df[~mask_non_prod].copy()
     add_log("1.6", "stockcode", f"{mask_non_prod.sum():,} dòng phí vận chuyển/điều chỉnh kế toán",
             "Loại bỏ khỏi bảng giao dịch sản phẩm",
@@ -239,6 +249,10 @@ def integrate_external_sources(df: pd.DataFrame) -> pd.DataFrame:
         df_merged["trade_bloc"] = df_merged["trade_bloc"].fillna("Other")
         df_merged["currency"] = df_merged["currency"].fillna("OTHER")
         df_merged["shipping_zone"] = df_merged["shipping_zone"].fillna("Other")
+
+    unknown = unknown_country_mask(df_merged["country"])
+    df_merged.loc[unknown, ["region", "trade_bloc", "shipping_zone"]] = "Unknown"
+    df_merged.loc[unknown, "currency"] = "UNKNOWN"
 
     # Merge 2: Thông tin mùa vụ mua sắm theo tháng
     df_merged["month"] = df_merged["invoice_date"].dt.month

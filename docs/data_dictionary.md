@@ -29,15 +29,15 @@ Nguồn và giấy phép: [data_sources.md](data_sources.md). Missing thật tí
 | quantity | nguyên có dấu | sản phẩm | Dương nếu mua; âm nếu hủy |
 | price | thực dương | GBP/sản phẩm | Đơn giá gốc, không đổi tiền tệ |
 | customer_id | chuỗi | ID | Customer ID không thiếu, chuẩn hóa từ số nguyên |
-| country | chuỗi | danh mục | Quốc gia có thể nội suy theo mode toàn kỳ của khách khi Unspecified (chỉ dùng mô tả) |
+| country | chuỗi | danh mục | Quốc gia có thể nội suy theo mode quốc gia đã biết toàn kỳ của khách khi chưa xác định (chỉ dùng mô tả) |
 | invoice_date | datetime | ngày giờ | InvoiceDate chuẩn hóa |
 | country_original | chuỗi | danh mục | Quốc gia quan sát sau strip, trước nội suy; giữ Unspecified; dùng phân nhóm W9 |
 | is_cancelled | boolean | True/False | Invoice bắt đầu C |
 | total_amount | thực có dấu | GBP | quantity × price |
-| region | chuỗi | danh mục | Nhóm khu vực từ bảng tham chiếu; fallback Other_International |
-| trade_bloc | chuỗi | danh mục | Nhãn tĩnh từ bảng dự án; fallback Other; không đảm bảo đúng lịch sử |
-| currency | chuỗi | danh mục | Nhãn tham chiếu tĩnh; fallback OTHER; giá giao dịch luôn GBP |
-| shipping_zone | chuỗi | danh mục | Proxy Domestic/Short_Haul/Long_Haul/Other, không phải phí thực |
+| region | chuỗi | danh mục | Nhóm khu vực từ bảng tham chiếu; fallback Other_International nếu biết quốc gia nhưng chưa khớp; Unknown nếu chưa xác định |
+| trade_bloc | chuỗi | danh mục | Nhãn tĩnh từ bảng dự án; fallback Other/Unknown; không đảm bảo đúng lịch sử |
+| currency | chuỗi | danh mục | Nhãn tham chiếu tĩnh; fallback OTHER/UNKNOWN; giá giao dịch luôn GBP |
+| shipping_zone | chuỗi | danh mục | Proxy Domestic/Short_Haul/Long_Haul/Other/Unknown, không phải phí thực |
 | month | nguyên | 1–12 | Tháng invoice_date |
 | day_of_week | nguyên | 0–6 | Thứ hai = 0, chủ nhật = 6 |
 | hour | nguyên | 0–23 | Giờ invoice_date |
@@ -100,3 +100,10 @@ Unknown gồm rỗng, unspecified, unknown, nan, none, european community; Chann
 | `target_repeat_90d` | 1 nếu có hóa đơn mua mới trong [cutoff, cutoff + 90 ngày), ngược lại 0 khi nguồn phủ đủ cửa sổ. Dòng tiếp nối hóa đơn cũ không tính là đơn mới. Không đưa vào X. |
 
 Cutoff mặc định 01/09/2011; thời điểm quan sát lấy từ dữ liệu gốc trước lọc. Không tái sử dụng kết quả nội suy quốc gia toàn kỳ của EDA cho mô hình.
+
+### Bổ sung W3–W7 và đánh giá theo thời gian (P1)
+
+- Cleaning Log 1.5: Rows = số dòng khôi phục quốc gia thành công; 1.5a: số còn chưa xác định tại bước đó (trước loại phi sản phẩm). Không cộng Rows như số dòng xóa.
+- Unknown gồm rỗng, unspecified, unknown, nan, none, n/a, null, european community; quốc gia chưa khớp metadata nhưng đã biết vẫn là Other_International. Không thay đổi country_original.
+- `customer_modeling_train`, `customer_modeling_validation`, `customer_modeling_test`: cùng schema như modeling dataset, lần lượt cutoff 01/03, 01/06, 01/09/2011. `customer_modeling_dataset.parquet` là snapshot test tương thích workflow cũ, không dùng để chọn mô hình.
+- `classification_cv.csv`: điểm trung bình CV trên train; `classification_temporal_metrics.csv`: metric validation/test với threshold xác định từ validation; `classification_feature_importance.csv`: giảm ROC-AUC trên validation sau hoán vị từng feature. Các CSV chỉ gồm số liệu tổng hợp, bị gitignore mặc định.

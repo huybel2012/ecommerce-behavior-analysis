@@ -217,7 +217,9 @@ Mở [04_classification_repeat_purchase.ipynb](notebooks/04_classification_repea
 - Mốc quan sát lấy từ timestamp cuối của nguồn giao dịch gốc trước khi làm sạch. Đây là kiểm tra độ phủ thời gian bảo thủ, giả định file nguồn đầy đủ và liên tục; nếu nguồn bị thiếu dòng/ngày thì vẫn cần kiểm chứng nguồn.
 - Cắt theo timestamp gốc rồi mới gom hóa đơn trong lịch sử; cùng cặp customer_id + invoice sau cutoff không tính là đơn mới nếu đã xuất hiện trước cutoff. Cờ mùa/cuối tuần lấy theo thời điểm bắt đầu hóa đơn đã quan sát.
 - Địa lý: mode của country_original đã quan sát trước cutoff; Unknown nếu không có quốc gia hợp lệ, không dùng quốc gia nội suy toàn kỳ.
-- Chia ngẫu nhiên theo khách hàng tại cùng cutoff; chưa đánh giá tổng quát hóa ở cutoff khác. HistGradientBoosting là ứng viên định trước, không khẳng định tốt nhất trước khi đối chiếu kết quả CV.
+- P1: ba cutoff train 01/03, validation 01/06, test 01/09/2011, nhãn 90 ngày không chồng lấn. CV phân tầng trong train chọn ROC-AUC cao nhất (hòa: Average Precision, rồi tên). Fit train, chọn F1 threshold trên validation, giữ nguyên model và threshold khi test. Không dùng test để chọn lại mô hình.
+- Khách có thể lặp qua các snapshot (dự báo khách đã biết), không đại diện cold-start; test tháng 9 đã được xem trong P0 nên kết quả mới là hồi cứu theo thời gian, không phải holdout chưa từng tiếp cận.
+- Notebook 04 tạo thêm `customer_modeling_train.parquet`, `customer_modeling_validation.parquet`, `customer_modeling_test.parquet`, bảng CV/metric/importance trong `reports/` và biểu đồ 05, 06. Permutation Importance tính trên validation, không chọn lại feature.
 
 ### Bước 6. Kiểm thử
 
@@ -232,7 +234,7 @@ Bộ test kiểm tra dữ liệu đầu vào, feature, preprocessor, ranh giới
 
 ### 7.1. Dữ liệu sau xử lý
 
-Các giá trị tham chiếu khi sử dụng bản CSV Online Retail II gốc:
+Các giá trị tham chiếu từ lần nghiệm thu P0 trên bản CSV Online Retail II gốc; tỷ lệ khớp metadata quốc gia có thể thay đổi sau P1, lấy số mới từ pipeline chạy lại:
 
 | Chỉ số | Kết quả |
 | --- | ---: |
@@ -255,6 +257,9 @@ Các biểu đồ khác:
 - [Mức chi tiêu theo khu vực thị trường](reports/figures/02_spending_by_region.png)
 - [Ma trận tương quan hành vi mua sắm](reports/figures/04_behavior_correlation_heatmap.png)
 
+- Notebook 01: sáu chiều chất lượng (điểm rubric nội bộ), so sánh dòng có/thiếu ID và kiểm tra timestamp đơn hàng. Notebook 02: thống kê location/spread/shape, Pearson và Spearman, thống kê theo khu vực/thị trường. Unknown được tách khỏi Other_International; điểm Accuracy không phải phép đo độ đúng thực tế.
+- [Đánh giá classification theo thời gian](reports/figures/05_classification_evaluation.png) và [Permutation Importance](reports/figures/06_classification_feature_importance.png) được cập nhật khi chạy notebook 04. Không dùng số liệu P0 như kết quả P1.
+
 ### 7.3. Kiểm định thống kê
 
 Ba giả thuyết được kiểm định hai phía với mức ý nghĩa 5%, có hiệu chỉnh Bonferroni cho ba phép kiểm định chính.
@@ -275,7 +280,7 @@ Phân tích độ nhạy sử dụng cửa sổ quan sát 365 ngày để giảm
 | Thống kê mô tả và trực quan hóa (W6–W7) | Đã triển khai |
 | Statistical Inference & A/B Testing (W9) | Đã triển khai kiểm định và thiết kế thí nghiệm đề xuất |
 | Regression Analysis (W10) | Kế hoạch dự báo chi tiêu trong 90 ngày tiếp theo |
-| Classification (W11) | Kế hoạch dự báo khả năng khách hàng quay lại mua |
+| Classification (W11) | Đã xây dựng temporal evaluation, model selection và permutation importance; chạy lại notebook 04 để có kết quả mới |
 | Ethics & Bias (W12) | Kế hoạch đánh giá giới hạn và sai lệch mô hình |
 
 Các mô hình dự báo tương lai cần xây dựng đặc trưng từ dữ liệu trước mốc dự báo, chia tập theo thời gian và kiểm tra data leakage. Hồ sơ khách hàng toàn kỳ hiện tại phục vụ phân tích mô tả, không sử dụng trực tiếp làm đầu vào dự báo tương lai.
