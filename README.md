@@ -57,11 +57,12 @@ Tham khảo [Data Dictionary](docs/data_dictionary.md) để xem định nghĩa 
 flowchart TD
     A[Online Retail II] --> B[Data Audit & Cleaning]
     B --> C[Data Integration & Processing]
-    C --> D[Customer Feature Engineering]
-    D --> E[Exploratory Data Analysis]
-    D --> F[Statistical Inference]
-    E --> G[Regression & Classification - Planned]
-    F --> G
+    C --> D[Customer Profiles - descriptive]
+    D --> E[EDA]
+    D --> F[Statistical Inference and sensitivity]
+    C --> T[Temporal features - cutoff 90 days]
+    T --> G[Classification - implemented]
+    T --> H[Regression - planned]
 ```
 
 | Thành phần | Nội dung |
@@ -102,10 +103,15 @@ ecommerce-behavior-analysis/
 │   ├── utils.py                            # Hàm kiểm toán dữ liệu
 │   ├── pipeline.py                         # Nạp, làm sạch và tích hợp
 │   ├── customer_features.py                # Đặc trưng cấp khách hàng (EDA)
-│   └── classification_features.py          # Đặc trưng trước cutoff và nhãn 90 ngày
+│   ├── classification_features.py          # Đặc trưng trước cutoff và nhãn 90 ngày
+│   ├── classification_evaluation.py        # CV và temporal evaluation
+│   ├── data_quality.py                     # Kiểm toán W3–W4
+│   └── robustness.py                       # Kiểm định an toàn và độ nhạy
 ├── tests/
 │   ├── test_data_contract.py                # Kiểm thử dữ liệu và đặc trưng
-│   └── test_classification_contract.py      # Kiểm thử cutoff/preprocessor
+│   ├── test_classification_contract.py      # Kiểm thử cutoff/preprocessor
+│   ├── test_p1_contract.py                  # Kiểm thử P1
+│   └── test_p2_contract.py                  # Kiểm thử P2
 ├── .gitignore
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -207,6 +213,8 @@ Mở [02_exploratory_data_analysis.ipynb](notebooks/02_exploratory_data_analysis
 
 Mở [03_statistical_inference.ipynb](notebooks/03_statistical_inference.ipynb), chọn **Restart Kernel & Run All** để thực hiện ba kiểm định thống kê và lưu `data/processed/customer_profiles.parquet`.
 
+Notebook 03 còn tạo `reports/sensitivity_analysis.csv` từ dữ liệu gốc: baseline, giữ duplicate, loại khách chi tiêu > P99 baseline và ngưỡng mùa vụ 40%/60%. Chỉ là phân tích thăm dò, không thay pipeline hoặc dùng để tối ưu mô hình.
+
 Notebook 02 và 03 đều yêu cầu `retail_processed.parquet` do pipeline tạo. Khi thay đổi dữ liệu gốc hoặc logic xử lý, chạy lại pipeline trước khi thực thi hai notebook này.
 
 ### Bước 5. Classification (W11)
@@ -234,7 +242,7 @@ Bộ test kiểm tra dữ liệu đầu vào, feature, preprocessor, ranh giới
 
 ### 7.1. Dữ liệu sau xử lý
 
-Các giá trị tham chiếu từ lần nghiệm thu P0 trên bản CSV Online Retail II gốc; tỷ lệ khớp metadata quốc gia có thể thay đổi sau P1, lấy số mới từ pipeline chạy lại:
+Các giá trị tham chiếu từ lần nghiệm thu P1 trên bản CSV Online Retail II gốc, **chưa tái tính sau P2**. P2 chuẩn hóa Description và quy tắc Unknown; hãy chạy lại pipeline và cả bốn notebook, kiểm tra số liệu trước khi báo cáo. Các ảnh PNG hiện có là kết quả P1 cho đến khi chạy lại.
 
 | Chỉ số | Kết quả |
 | --- | ---: |
@@ -245,7 +253,7 @@ Các giá trị tham chiếu từ lần nghiệm thu P0 trên bản CSV Online R
 | Tỷ lệ khớp bảng quốc gia | 99,71% |
 | Tỷ lệ khớp lịch mùa vụ | 100% |
 
-### 7.2. Trực quan hóa dữ liệu
+### 7.2. Trực quan hóa dữ liệu (ảnh tham chiếu P1)
 
 ![Xu hướng giá trị giao dịch mua và số khách hàng hoạt động theo tháng](reports/figures/03_monthly_revenue_trend.png)
 
@@ -260,7 +268,7 @@ Các biểu đồ khác:
 - Notebook 01: sáu chiều chất lượng (điểm rubric nội bộ), so sánh dòng có/thiếu ID và kiểm tra timestamp đơn hàng. Notebook 02: thống kê location/spread/shape, Pearson và Spearman, thống kê theo khu vực/thị trường. Unknown được tách khỏi Other_International; điểm Accuracy không phải phép đo độ đúng thực tế.
 - [Đánh giá classification theo thời gian](reports/figures/05_classification_evaluation.png) và [Permutation Importance](reports/figures/06_classification_feature_importance.png) được cập nhật khi chạy notebook 04. Không dùng số liệu P0 như kết quả P1.
 
-### 7.3. Kiểm định thống kê
+### 7.3. Kiểm định thống kê (tham chiếu P1)
 
 Ba giả thuyết được kiểm định hai phía với mức ý nghĩa 5%, có hiệu chỉnh Bonferroni cho ba phép kiểm định chính.
 
@@ -271,6 +279,10 @@ Ba giả thuyết được kiểm định hai phía với mức ý nghĩa 5%, c�
 | Thị trường có liên hệ với việc mua nhiều lần trong kỳ quan sát không? | Pearson Chi-square | Chưa đủ bằng chứng thống kê về mối liên hệ. |
 
 Phân tích độ nhạy sử dụng cửa sổ quan sát 365 ngày để giảm ảnh hưởng của thời lượng quan sát. Chi tiết khoảng tin cậy, effect size, p-value và thiết kế A/B Testing được trình bày trong notebook 03.
+
+### 7.4. Classification – kết quả tham chiếu P1
+
+Random Forest được chọn từ CV trên train tháng 3/2011 (ROC-AUC 0,7906). Threshold 0,4805 chọn trên validation tháng 6; temporal test tháng 9 gồm 5.225 khách, accuracy 73,01%, ROC-AUC 0,7936, F1 0,6579, AP 0,7639. Đây là kết quả đã lưu ở commit `63487e3`, không phải số liệu P2 đã nghiệm thu. Không tối ưu lại theo test.
 
 ## 8. Hướng phát triển
 
@@ -291,6 +303,13 @@ Các mô hình dự báo tương lai cần xây dựng đặc trưng từ dữ l
 - Loại giao dịch thiếu Customer ID có thể gây sai lệch chọn mẫu; khách mua buôn có thể ảnh hưởng đến phân phối chi tiêu.
 - Nhóm khu vực, lịch mùa vụ và vùng vận chuyển là các quy ước phân tích, không phải số liệu chi phí vận chuyển hay dữ liệu khuyến mại thực tế.
 - Kiểm định thống kê trên dữ liệu quan sát không chứng minh quan hệ nhân quả. Dataset không chứa phân nhóm thử nghiệm ngẫu nhiên; A/B Testing hiện là thiết kế đề xuất.
+
+## Trạng thái P2
+
+- Dùng chung quy tắc phát hiện quốc gia chưa biết; W9 vẫn loại Mixed/Unknown, W11 chọn quốc gia đã biết phổ biến trước cutoff.
+- Kiểm tra khóa, giá, dấu số lượng, cờ hủy và tích quantity × price ở đầu vào đặc trưng temporal.
+- Bảng Chi-square suy biến hoặc mẫu không đủ điều kiện được báo không đủ điều kiện, không coi là p=1.
+- Notebook đã bỏ output cũ khi sửa P2. Chạy Restart Kernel & Run All trên dữ liệu gốc đúng môi trường để tạo lại output và biểu đồ; không commit CSV/Parquet hoặc ID khách hàng mẫu.
 
 ## Tài liệu tham khảo
 

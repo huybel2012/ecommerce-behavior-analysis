@@ -25,7 +25,7 @@ Nguồn và giấy phép: [data_sources.md](data_sources.md). Missing thật tí
 |---|---|---|---|
 | invoice | chuỗi | ID | Invoice sau strip |
 | stockcode | chuỗi | ID | StockCode sau strip; loại mã phi sản phẩm theo danh sách pipeline |
-| description | chuỗi | văn bản | Mô tả sau strip, token thiếu gán UNKNOWN_PRODUCT |
+| description | chuỗi | văn bản | Mô tả sau strip; thiếu thật (isna) hoặc token lỗi không phân biệt hoa/thường gán UNKNOWN_PRODUCT |
 | quantity | nguyên có dấu | sản phẩm | Dương nếu mua; âm nếu hủy |
 | price | thực dương | GBP/sản phẩm | Đơn giá gốc, không đổi tiền tệ |
 | customer_id | chuỗi | ID | Customer ID không thiếu, chuẩn hóa từ số nguyên |
@@ -73,7 +73,7 @@ Nguồn và giấy phép: [data_sources.md](data_sources.md). Missing thật tí
 | is_uk | chuỗi | UK/International/Unknown/Mixed | Mixed nếu >=2 quốc gia biết; Unknown nếu có bất kỳ quốc gia không xác định (trừ khi đã Mixed); UK nếu duy nhất United Kingdom; còn lại International |
 | is_repeat_buyer | nguyên | 0/1 | frequency > 1 trong cửa sổ, không phải nhãn giữ chân tương lai |
 
-Unknown gồm rỗng, unspecified, unknown, nan, none, european community; Channel Islands không thuộc UK. W9 loại Unknown/Mixed khỏi H1/H3, giữ H2. Nhóm `peak_group` (tạm trong notebook): Peak nếu peak_month_ratio >= 0.5, Other nếu thấp hơn; H2 so sánh trung bình log1p(monetary), không đo tác động của mùa vụ. Phân tích 365 ngày lấy giao dịch trong [ngày mua đầu ghi nhận, ngày đó + 365 ngày), chỉ cohort có đủ thời gian quan sát; nhãn địa lý xác định từ `country_original` của cửa sổ đó. So sánh riêng trên cohort chung để giảm nhiễu do thay đổi tập khách.
+Unknown gồm rỗng, unspecified, unknown, nan, none, n/a, null, european community; Channel Islands không thuộc UK. W9 loại Unknown/Mixed khỏi H1/H3, giữ H2. Nhóm `peak_group` (tạm trong notebook): Peak nếu peak_month_ratio >= 0.5, Other nếu thấp hơn; H2 so sánh trung bình log1p(monetary), không đo tác động của mùa vụ. Phân tích 365 ngày lấy giao dịch trong [ngày mua đầu ghi nhận, ngày đó + 365 ngày), chỉ cohort có đủ thời gian quan sát; nhãn địa lý xác định từ `country_original` của cửa sổ đó. So sánh riêng trên cohort chung để giảm nhiễu do thay đổi tập khách.
 
 ## 4. Cleaning log
 
@@ -107,3 +107,9 @@ Cutoff mặc định 01/09/2011; thời điểm quan sát lấy từ dữ liệu
 - Unknown gồm rỗng, unspecified, unknown, nan, none, n/a, null, european community; quốc gia chưa khớp metadata nhưng đã biết vẫn là Other_International. Không thay đổi country_original.
 - `customer_modeling_train`, `customer_modeling_validation`, `customer_modeling_test`: cùng schema như modeling dataset, lần lượt cutoff 01/03, 01/06, 01/09/2011. `customer_modeling_dataset.parquet` là snapshot test tương thích workflow cũ, không dùng để chọn mô hình.
 - `classification_cv.csv`: điểm trung bình CV trên train; `classification_temporal_metrics.csv`: metric validation/test với threshold xác định từ validation; `classification_feature_importance.csv`: giảm ROC-AUC trên validation sau hoán vị từng feature. Các CSV chỉ gồm số liệu tổng hợp, bị gitignore mặc định.
+
+### Hợp đồng P2
+
+- `description` giữ giá trị thiếu thật trong bước chuẩn hóa/kiểm tra trùng, sau đó gán `UNKNOWN_PRODUCT` cho NA hoặc token `nan`, `none`, `null`, `n/a`, rỗng, `?`, `??`, `check`, `damaged` (không phân biệt hoa/thường). Dòng NA thật và chuỗi `nan` không mặc định là trùng trước bước gán.
+- Đầu vào temporal cần `price`, `quantity`, `total_amount` hữu hạn, giá dương, quantity nguyên và đúng dấu theo cờ hủy; `total_amount` bằng `quantity * price` trong sai số số thực. Cột `price` không phải feature mới.
+- Bảng `reports/sensitivity_analysis.csv`: `scenario`, `peak_threshold`, `clean_lines`, cỡ mẫu theo nhóm, tổng/trung vị/trung bình gross GBP và hiệu ứng H1 (Intl − UK AOV median), H2 (Peak − Other mean log1p), H3 (UK − Intl repeat, điểm %), p thăm dò H3 và phương pháp. NaN biểu thị không đủ điều kiện. Kịch bản chỉ thay từng giả định, không thay baseline hoặc dữ liệu huấn luyện.

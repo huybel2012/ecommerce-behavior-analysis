@@ -44,7 +44,7 @@ def missing_id_comparison(raw):
     # Chuẩn hóa chuỗi và xử lý duplicate giống pipeline trước khi loại CID.
     d = raw.copy()
     for col in ['Invoice', 'StockCode', 'Description', 'Country']:
-        d[col] = d[col].astype(str).str.strip()
+        d[col] = d[col].astype("string" if col == "Description" else str).str.strip()
     d = d.drop_duplicates().copy()
     d['id_status'] = np.where(d['Customer ID'].isna(), 'Missing_ID', 'Known_ID')
     cancel = d['Invoice'].str.startswith('C')

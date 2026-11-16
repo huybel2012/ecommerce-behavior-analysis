@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from src.pipeline import get_country_metadata, run_pipeline
+from src.pipeline import get_country_metadata, run_pipeline, unknown_country_mask
 
 PREDICTION_HORIZON_DAYS = 90
 INVOICE_KEYS = ["customer_id", "invoice"]
@@ -46,9 +46,7 @@ def unify_invoice_timestamps(df: pd.DataFrame) -> pd.DataFrame:
 def _historical_geography(hist_df: pd.DataFrame) -> pd.DataFrame:
     """Chọn quốc gia quan sát phổ biến nhất trước cutoff; ánh xạ cả hai cột từ cùng quốc gia."""
     observed = hist_df["country_original"].astype("string").str.strip()
-    unknown = observed.isna() | observed.str.lower().isin(
-        ["", "unspecified", "unknown", "nan", "none", "n/a", "null", "european community"]
-    )
+    unknown = unknown_country_mask(observed)
     known = hist_df.loc[~unknown, ["customer_id"]].copy()
     known["country"] = observed.loc[~unknown]
     # mode() chọn theo thứ tự xác định nếu nhiều quốc gia đồng hạng.
@@ -88,10 +86,10 @@ def build_cutoff_customer_dataset(
         raise ValueError(f"Thiếu cửa sổ quan sát nhãn: cần đến {horizon_end_ts}, chỉ có đến {coverage_end}.")
 
     required = set(INVOICE_KEYS + ["invoice_date", "is_cancelled", "country_original",
-                                  "quantity", "stockcode", "total_amount"])
+                                  "quantity", "stockcode", "price", "total_amount"])
     if missing := required.difference(df.columns):
         raise ValueError(f"Thiếu cột: {sorted(missing)}; chạy lại pipeline từ dữ liệu gốc.")
-    df = df.copy()
+    df = df.reset_index(drop=True).copy()
     df["invoice_date"] = pd.to_datetime(df["invoice_date"], errors="raise")
     if df[INVOICE_KEYS + ["invoice_date", "is_cancelled"]].isna().any().any():
         raise ValueError("Thiếu khóa, timestamp hoặc trạng thái giao dịch.")
@@ -99,9 +97,22 @@ def build_cutoff_customer_dataset(
         raise ValueError("is_cancelled phải là cờ boolean.")
     if (df["invoice_date"] > coverage_end).any():
         raise ValueError("Dữ liệu có timestamp sau observed_until; kiểm tra lại nguồn.")
-    if not np.isfinite(df[["quantity", "total_amount"]].to_numpy(dtype=float)).all():
-        raise ValueError("Quantity/total_amount phải hữu hạn.")
+    for col in INVOICE_KEYS + ["stockcode"]:
+        if df[col].isna().any() or df[col].astype("string").str.strip().eq("").any():
+            raise ValueError(f"Khóa {col} thiếu hoặc rỗng.")
+    for col in ["quantity", "price", "total_amount"]:
+        df[col] = pd.to_numeric(df[col], errors="raise")
+    values = df[["quantity", "price", "total_amount"]].to_numpy(dtype=float)
+    if not np.isfinite(values).all():
+        raise ValueError("Quantity/price/total_amount phải hữu hạn.")
     df["is_cancelled"] = df["is_cancelled"].astype(bool)
+    if not df["is_cancelled"].eq(df["invoice"].astype("string").str.startswith("C")).all():
+        raise ValueError("is_cancelled không khớp mã hóa đơn.")
+    q, price, amount = values.T
+    if (price <= 0).any() or (q != np.floor(q)).any() or np.any(np.where(df["is_cancelled"], q >= 0, q <= 0)):
+        raise ValueError("Giá hoặc dấu số lượng không hợp lệ.")
+    if not np.allclose(amount, q * price, rtol=1e-9, atol=1e-8):
+        raise ValueError("total_amount không khớp quantity * price.")
     df["line_amount"] = df["total_amount"]
 
     # Cắt bằng timestamp gốc TRƯỚC khi gom hóa đơn. Không đưa dòng tương lai về quá khứ.

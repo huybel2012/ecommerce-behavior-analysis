@@ -1,6 +1,7 @@
 """Các đặc trưng mô tả thống nhất cho EDA và W9 (không dùng toàn kỳ làm feature dự báo)."""
 import numpy as np
 import pandas as pd
+from src.pipeline import unknown_country_mask
 
 
 def build_orders(df_valid):
@@ -25,7 +26,7 @@ def aggregate_orders(order_df):
 def classify_market(df_valid):
     """Nhãn thị trường từ quốc gia quan sát trong mẫu hiện tại, không từ nội suy toàn kỳ."""
     country = df_valid["country_original"].astype("string").str.strip()
-    unknown = country.isna() | country.str.lower().isin(["", "unspecified", "unknown", "nan", "none", "european community"])
+    unknown = unknown_country_mask(country)
     country_check = pd.DataFrame({"customer_id": df_valid["customer_id"],
                                   "known_country": country.mask(unknown), "unknown": unknown})
     geo = country_check.groupby("customer_id", as_index=False).agg(

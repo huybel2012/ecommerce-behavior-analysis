@@ -132,7 +132,7 @@ def load_raw_data(raw_dir: str = "data/raw") -> pd.DataFrame:
     return df
 
 
-def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def clean_transactions(df_raw: pd.DataFrame, *, drop_exact_duplicates: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Làm sạch dữ liệu giao dịch và ghi nhật ký xử lý (Cleaning Log)."""
     df = validate_raw_data(df_raw, "clean_transactions")
     logs = []
@@ -151,18 +151,21 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     df["invoice_date"] = pd.to_datetime(df["invoicedate"])
     df = df.drop(columns=["invoicedate"])
-    for col in ["invoice", "stockcode", "description", "country"]:
+    for col in ["invoice", "stockcode", "country"]:
         df[col] = df[col].astype(str).str.strip()
+    df["description"] = df["description"].astype("string").str.strip()
     add_log("1.1", "all_columns", "Tên cột chưa đồng nhất, InvoiceDate dạng chuỗi",
             "Chuẩn hóa snake_case, ép kiểu datetime và loại bỏ khoảng trắng thừa",
             len(df), "Đảm bảo tính nhất quán khi trích xuất thời gian và ghép bảng")
 
     # 2. Xóa trùng lặp hoàn toàn
     n_dups = df.duplicated().sum()
-    df = df.drop_duplicates().reset_index(drop=True)
+    if drop_exact_duplicates:
+        df = df.drop_duplicates()
+    df = df.reset_index(drop=True)
     add_log("1.2", "all", f"{n_dups:,} dòng trùng lặp hoàn toàn",
-            "Xóa các dòng trùng lặp, giữ lại bản ghi đầu tiên",
-            n_dups, "Giả định các dòng giống hệt là trùng bản ghi; không xác minh được nguồn gốc từng dòng")
+            "Xóa các dòng trùng lặp, giữ bản ghi đầu" if drop_exact_duplicates else "Giữ dòng trùng (kịch bản độ nhạy)",
+            n_dups if drop_exact_duplicates else 0, "Giả định các dòng giống hệt là trùng bản ghi; không xác minh được nguồn gốc từng dòng")
 
     # 3. Xử lý thiếu customer_id
     n_miss_cid = df["customer_id"].isna().sum()
@@ -173,8 +176,8 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
             n_miss_cid, "Đơn vị phân tích là hành vi từng khách hàng")
 
     # 4. Chuẩn hóa mô tả sản phẩm bị thiếu hoặc lỗi ngụy trang
-    bad_desc = ["nan", "None", "", "?", "??", "check", "damaged"]
-    mask_desc = df["description"].isin(bad_desc)
+    bad_desc = {"nan", "none", "null", "n/a", "", "?", "??", "check", "damaged"}
+    mask_desc = df["description"].isna() | df["description"].str.lower().isin(bad_desc)
     df.loc[mask_desc, "description"] = "UNKNOWN_PRODUCT"
     add_log("1.4", "description", f"{mask_desc.sum():,} dòng thiếu hoặc chứa ký tự lỗi",
             "Gán nhãn 'UNKNOWN_PRODUCT' thay vì xóa dòng",
