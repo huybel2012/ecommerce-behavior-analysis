@@ -91,6 +91,14 @@ def unknown_country_mask(values):
     return normalized.isna() | normalized.isin(UNKNOWN_COUNTRIES)
 
 
+BAD_DESCRIPTIONS = {"nan", "none", "null", "n/a", "", "?", "??", "check", "damaged"}
+
+
+def missing_description_mask(values):
+    normalized = values.astype("string").str.strip().str.lower()
+    return normalized.isna() | normalized.isin(BAD_DESCRIPTIONS)
+
+
 def validate_raw_data(df: pd.DataFrame, source: str) -> pd.DataFrame:
     """Kiểm tra schema và kiểu dữ liệu trước khi làm sạch; cho phép thiếu CID/mô tả."""
     if df.empty or df.columns.has_duplicates or set(df.columns) != set(RAW_COLUMNS):
@@ -176,8 +184,7 @@ def clean_transactions(df_raw: pd.DataFrame, *, drop_exact_duplicates: bool = Tr
             n_miss_cid, "Đơn vị phân tích là hành vi từng khách hàng")
 
     # 4. Chuẩn hóa mô tả sản phẩm bị thiếu hoặc lỗi ngụy trang
-    bad_desc = {"nan", "none", "null", "n/a", "", "?", "??", "check", "damaged"}
-    mask_desc = df["description"].isna() | df["description"].str.lower().isin(bad_desc)
+    mask_desc = missing_description_mask(df["description"])
     df.loc[mask_desc, "description"] = "UNKNOWN_PRODUCT"
     add_log("1.4", "description", f"{mask_desc.sum():,} dòng thiếu hoặc chứa ký tự lỗi",
             "Gán nhãn 'UNKNOWN_PRODUCT' thay vì xóa dòng",

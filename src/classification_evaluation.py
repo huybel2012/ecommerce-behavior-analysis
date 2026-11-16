@@ -20,7 +20,7 @@ FEATURES = sum(FEATURE_WHITELIST.values(), [])
 TARGET = 'target_repeat_90d'
 
 
-def temporal_datasets(df, observed_until, cutoffs=CUTOFFS):
+def temporal_datasets(df, observed_until, cutoffs=CUTOFFS, *, include_spend_target=False):
     """Ba snapshot riêng, nhãn train/validation đã quan sát xong trước mốc tiếp theo."""
     dates = tuple(pd.Timestamp(c) for c in cutoffs)
     if len(dates) != 3 or any(pd.isna(c) for c in dates):
@@ -28,7 +28,8 @@ def temporal_datasets(df, observed_until, cutoffs=CUTOFFS):
     delta = pd.Timedelta(days=PREDICTION_HORIZON_DAYS)
     if any(a+delta > b for a,b in zip(dates, dates[1:])):
         raise ValueError('Cửa sổ nhãn không được chồng lấn, phải theo thứ tự thời gian.')
-    return {name: build_cutoff_customer_dataset(df, c, observed_until=observed_until)
+    return {name: build_cutoff_customer_dataset(df, c, observed_until=observed_until,
+                                                include_spend_target=include_spend_target)
             for name,c in zip(('train','validation','test'), dates)}
 
 

@@ -67,6 +67,7 @@ def build_cutoff_customer_dataset(
     prediction_horizon_days: int = PREDICTION_HORIZON_DAYS,
     *,
     observed_until: str | pd.Timestamp,
+    include_spend_target: bool = False,
 ) -> pd.DataFrame:
     """X từ dòng quan sát trước cutoff; y từ đơn mua mới trong [cutoff, cutoff+90d).
 
@@ -203,6 +204,14 @@ def build_cutoff_customer_dataset(
     # Tạo biến mục tiêu từ cửa sổ tương lai sau cutoff_date
     repeat_buyers = set(future_df["customer_id"].unique())
     cust_features["target_repeat_90d"] = cust_features["customer_id"].isin(repeat_buyers).astype(int)
+
+    # W10 dùng chính các dòng của đơn mua mới như W11; zero nếu không có đơn.
+    if include_spend_target:
+        spend = future_df.groupby("customer_id")["total_amount"].sum()
+        cust_features["target_spend_90d"] = cust_features["customer_id"].map(spend).fillna(0.0).astype(float)
+        target = cust_features["target_spend_90d"]
+        if not np.isfinite(target).all() or not target.gt(0).eq(cust_features["target_repeat_90d"].eq(1)).all():
+            raise ValueError("Nhãn chi tiêu không hữu hạn hoặc không nhất quán với nhãn mua lại.")
 
     # Loại bỏ cột timestamp trung gian để giữ bảng đặc trưng sạch
     cust_features = cust_features.drop(columns=["first_purchase_ts", "last_purchase_ts"])

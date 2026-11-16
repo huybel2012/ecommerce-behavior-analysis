@@ -112,4 +112,14 @@ Cutoff mặc định 01/09/2011; thời điểm quan sát lấy từ dữ liệu
 
 - `description` giữ giá trị thiếu thật trong bước chuẩn hóa/kiểm tra trùng, sau đó gán `UNKNOWN_PRODUCT` cho NA hoặc token `nan`, `none`, `null`, `n/a`, rỗng, `?`, `??`, `check`, `damaged` (không phân biệt hoa/thường). Dòng NA thật và chuỗi `nan` không mặc định là trùng trước bước gán.
 - Đầu vào temporal cần `price`, `quantity`, `total_amount` hữu hạn, giá dương, quantity nguyên và đúng dấu theo cờ hủy; `total_amount` bằng `quantity * price` trong sai số số thực. Cột `price` không phải feature mới.
-- Bảng `reports/sensitivity_analysis.csv`: `scenario`, `peak_threshold`, `clean_lines`, cỡ mẫu theo nhóm, tổng/trung vị/trung bình gross GBP và hiệu ứng H1 (Intl − UK AOV median), H2 (Peak − Other mean log1p), H3 (UK − Intl repeat, điểm %), p thăm dò H3 và phương pháp. NaN biểu thị không đủ điều kiện. Kịch bản chỉ thay từng giả định, không thay baseline hoặc dữ liệu huấn luyện.
+- Bảng `reports/sensitivity_analysis.csv`: `scenario`, `peak_threshold`, `clean_lines` (mọi dòng sạch, kể cả khách chỉ hủy; kịch bản P99 chỉ loại dòng của khách vượt P99), cỡ mẫu theo nhóm, tổng/trung vị/trung bình gross GBP và hiệu ứng H1 (Intl − UK AOV median), H2 (Peak − Other mean log1p), H3 (UK − Intl repeat, điểm %), p thăm dò H3 và phương pháp. NaN biểu thị không đủ điều kiện. Kịch bản chỉ thay từng giả định, không thay baseline hoặc dữ liệu huấn luyện.
+
+### W10 – Regression
+
+| Cột | Kiểu / đơn vị | Định nghĩa |
+|---|---|---|
+| target_spend_90d | float / GBP | Tổng `total_amount` của dòng mua hợp lệ trong [cutoff, cutoff+90 ngày), thuộc đơn mới chưa xuất hiện trước cutoff; 0 nếu không mua. Tương đương target_repeat_90d = 1 khi >0. Không trừ hoàn trả. |
+
+Dữ liệu `customer_regression_{train,validation,test}.parquet` cùng snapshot W11, thêm target trên; không dùng ID, nhãn hoặc hồ sơ toàn kỳ làm feature. Tập 7 feature số định trước: recency_days, observation_span_days, frequency, avg_order_value, unique_products (log1p + RobustScaler); peak_month_ratio, cancel_rate (StandardScaler). Fit trong từng fold train. `region` và `shipping_zone` còn trong snapshot để đánh giá nhóm sau này, không là input W10.
+
+Bảng kết quả W10: `regression_cv.csv` (MAE/RMSE CV GBP, SD MAE); `regression_validation.csv`, `regression_test.csv` (n, MAE, RMSE, R², tỷ lệ dự báo âm trước clip, mean error = actual − prediction); `regression_ols_coefficients.csv` (GBP trên đơn vị đã biến đổi, HC3 SE, CI 95%); VIF và tổng hợp diagnostics OLS train. Cả hai nhãn được loại khỏi input. Các điểm cực trị giữ nguyên; NaN CI/R²/VIF khi không đủ điều kiện. Audit chỉ lưu thống kê tổng hợp; missing token theo đúng cột, NA thật được đếm riêng.

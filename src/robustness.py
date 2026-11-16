@@ -46,8 +46,9 @@ def sensitivity_analysis(raw):
     keep = build_customer_profiles(integrate_external_sources(keep_clean))
     p99 = base['monetary'].quantile(.99)
     trimmed = base[base['monetary'].le(p99)]
+    # clean_lines: mọi dòng sạch (kể cả khách chỉ hủy); chỉ loại chính xác khách > P99.
     cases = [('baseline', base, .5, len(base_clean)), ('keep_exact_duplicates', keep, .5, len(keep_clean)),
-             ('exclude_above_p99', trimmed, .5, len(base_clean[base_clean['customer_id'].isin(trimmed['customer_id'])])),
+             ('exclude_above_p99', trimmed, .5, len(base_clean[~base_clean['customer_id'].isin(base.loc[base['monetary'].gt(p99), 'customer_id'])])),
              ('peak_threshold_40pct', base, .4, len(base_clean)), ('peak_threshold_60pct', base, .6, len(base_clean))]
     rows = []
     for name, profiles, threshold, n_lines in cases:
