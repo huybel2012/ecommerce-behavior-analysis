@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Bỏ qua dữ liệu thô và file nặng
+data/raw/
+*.csv
+*.xlsx
+*.parquet
+
+# Bỏ qua môi trường ảo và cache Jupyter
+.venv/
+venv/
+.ipynb_checkpoints/
+__pycache__/
