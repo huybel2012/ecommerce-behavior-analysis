@@ -22,3 +22,7 @@ Ghép trái nhiều-một với kiểm chứng tính duy nhất khóa (`validate
 ## Biến đổi và lưu trữ
 
 Giữ file gốc bất biến; sửa encoding, kiểm tra schema, chuẩn hóa tên và kiểu, xóa bản ghi giống hệt theo giả định, bỏ khách vô danh, gán mô tả thiếu, lưu `country_original` sau strip trước nội suy country, loại mã phi sản phẩm và bản ghi có giá/dấu số lượng không hợp lệ. Giữ giao dịch hủy có dấu âm để phân tích hoàn trả. Gắn đặc trưng ngày/giờ, metadata. Hồ sơ khách chỉ từ khách có đơn mua; định nghĩa ở [Data Dictionary](data_dictionary.md). Giới hạn chính: phạm vi thời gian/cơ sở bán lẻ, loại khách vô danh, sao chép hàng có thể là giao dịch hợp lệ, không biết lần mua đầu thật và không có thí nghiệm.
+
+## Đối chiếu đạo đức W12
+
+Xem [Datasheet](datasheet.md) cho nhật ký kiểm tra license, điều khoản/robots.txt (phần chưa xác minh được ghi rõ), consent, chính sách đề xuất về lưu giữ, selection bias và k thực nghiệm. Không tuyên bố bản CSV mirror có license độc lập đã xác minh hoặc dữ liệu đã ẩn danh hoàn toàn.

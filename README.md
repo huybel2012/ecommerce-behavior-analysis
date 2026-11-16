@@ -4,7 +4,7 @@
 
 Dự án thuộc học phần **INFO3020 – Nhập môn Khoa học dữ liệu**, sử dụng dữ liệu giao dịch thực tế của một nhà bán lẻ trực tuyến tại Anh để phân tích hành vi mua sắm, mức chi tiêu, tần suất giao dịch và xu hướng mua hàng theo thời gian.
 
-Dự án triển khai quy trình khoa học dữ liệu từ thu thập, kiểm tra chất lượng và xử lý dữ liệu đến phân tích khám phá (EDA), trực quan hóa và kiểm định thống kê. Kết quả là nền tảng cho các mô hình dự báo chi tiêu và khả năng khách hàng quay lại mua hàng.
+Dự án triển khai quy trình khoa học dữ liệu từ thu thập, kiểm tra chất lượng và xử lý dữ liệu đến phân tích khám phá (EDA), trực quan hóa và kiểm định thống kê. Dự án cũng đánh giá các mô hình dự báo chi tiêu và khả năng khách hàng quay lại mua hàng, cùng các vấn đề về sai lệch và quyền riêng tư.
 
 ## 1. Mục tiêu nghiên cứu
 
@@ -12,7 +12,7 @@ Dự án triển khai quy trình khoa học dữ liệu từ thu thập, kiểm 
 - So sánh hành vi khách hàng giữa thị trường Anh và các thị trường quốc tế.
 - Phân tích xu hướng mua hàng theo thời gian, mùa vụ và cuối tuần.
 - Đánh giá mối liên hệ giữa các đặc trưng khách hàng và hành vi mua nhiều lần bằng phương pháp thống kê.
-- Xây dựng cơ sở dữ liệu và đặc trưng nhất quán cho các bài toán dự báo trong giai đoạn tiếp theo.
+- Xây dựng đặc trưng theo thời gian, đánh giá khả năng dự báo chi tiêu và mua lại, phân tích sai lệch theo nhóm khách hàng.
 
 ## 2. Dataset
 
@@ -61,8 +61,10 @@ flowchart TD
     D --> E[EDA]
     D --> F[Statistical Inference and sensitivity]
     C --> T[Temporal features - cutoff 90 days]
-    T --> G[Classification - implemented]
-    T --> H[Regression - implemented]
+    T --> G[Classification]
+    T --> H[Regression]
+    G --> I[Ethics and Bias]
+    H --> I
 ```
 
 | Thành phần | Nội dung |
@@ -73,7 +75,7 @@ flowchart TD
 | EDA & Visualization | Phân tích thống kê mô tả, phân phối chi tiêu, khu vực thị trường, xu hướng theo tháng và tương quan giữa các biến. |
 | Statistical Inference | Kiểm định giả thuyết, khoảng tin cậy, effect size, hiệu chỉnh Bonferroni, phân tích độ nhạy và thiết kế A/B Testing đề xuất. |
 
-`monetary` là tổng giá trị các giao dịch mua hợp lệ, chưa trừ hoàn trả. `weekend_ratio` và `peak_month_ratio` được tính theo số hóa đơn mua, không theo số dòng sản phẩm. Notebook EDA và kiểm định thống kê sử dụng chung logic tạo hồ sơ khách hàng.
+`monetary` là tổng giá trị các giao dịch mua hợp lệ, chưa trừ hoàn trả. `weekend_ratio` và `peak_month_ratio` được tính theo số hóa đơn mua, không theo số dòng sản phẩm. Notebook EDA và kiểm định thống kê sử dụng chung logic tạo hồ sơ khách hàng. Quy tắc nhận diện quốc gia chưa xác định được dùng chung; kiểm tra tính nhất quán của khóa, giá, số lượng, cờ hủy và `total_amount` trước khi tạo đặc trưng temporal. Bảng Chi-square suy biến được báo không đủ điều kiện kiểm định.
 
 ## 4. Cấu trúc thư mục
 
@@ -88,13 +90,17 @@ ecommerce-behavior-analysis/
 │       └── customer_modeling_dataset.parquet
 ├── docs/
 │   ├── data_dictionary.md                  # Từ điển dữ liệu
-│   └── data_sources.md                     # Nguồn dữ liệu và metadata
+│   ├── data_sources.md                     # Nguồn dữ liệu và metadata
+│   ├── datasheet.md                        # Đạo đức và dữ liệu
+│   ├── model_card_classification.md
+│   └── model_card_regression.md
 ├── notebooks/
 │   ├── 01_data_audit_and_cleaning.ipynb       # Kiểm toán và làm sạch
 │   ├── 02_exploratory_data_analysis.ipynb     # EDA và trực quan hóa
 │   ├── 03_statistical_inference.ipynb         # Kiểm định thống kê
 │   ├── 04_classification_repeat_purchase.ipynb # Phân loại
-│   └── 05_regression_90day_spend.ipynb       # Hồi quy
+│   ├── 05_regression_90day_spend.ipynb       # Hồi quy
+│   └── 06_ethics_and_bias.ipynb             # Đạo đức và sai lệch dữ liệu
 ├── reports/
 │   ├── figures/                            # Biểu đồ EDA
 │   ├── cleaning_log.csv                    # Nhật ký xử lý (tự sinh)
@@ -106,15 +112,17 @@ ecommerce-behavior-analysis/
 │   ├── customer_features.py                # Đặc trưng cấp khách hàng (EDA)
 │   ├── classification_features.py          # Đặc trưng trước cutoff và nhãn 90 ngày
 │   ├── classification_evaluation.py        # CV và temporal evaluation
-│   ├── data_quality.py                     # Kiểm toán W3–W4
+│   ├── data_quality.py                     # Kiểm toán chất lượng dữ liệu
 │   ├── robustness.py                       # Kiểm định an toàn và độ nhạy
-│   └── regression_evaluation.py            # W10 CV, metrics, OLS diagnostics
+│   ├── regression_evaluation.py            # CV, metrics, OLS diagnostics
+│   └── fairness_evaluation.py              # Kiểm toán fairness tổng hợp
 ├── tests/
 │   ├── test_data_contract.py                # Kiểm thử dữ liệu và đặc trưng
 │   ├── test_classification_contract.py      # Kiểm thử cutoff/preprocessor
-│   ├── test_p1_contract.py                  # Kiểm thử P1
-│   ├── test_p2_contract.py                  # Kiểm thử P2
-│   └── test_w10_contract.py                 # Kiểm thử W10 và các sửa lỗi
+│   ├── test_p1_contract.py                  # Kiểm thử chất lượng dữ liệu và đánh giá
+│   ├── test_p2_contract.py                  # Kiểm thử dữ liệu biên và độ nhạy
+│   ├── test_w10_contract.py                 # Kiểm thử hồi quy và dữ liệu
+│   └── test_w12_contract.py                 # Kiểm thử fairness và quyền riêng tư
 ├── .gitignore
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -138,7 +146,7 @@ git clone https://github.com/huybel2012/ecommerce-behavior-analysis.git
 cd ecommerce-behavior-analysis
 ```
 
-Nếu sử dụng một nhánh phát triển, chuyển sang nhánh tương ứng trước khi cài đặt. Ví dụ, sau khi nhánh `Dung` được đẩy lên GitHub:
+Nếu sử dụng một nhánh phát triển, chuyển sang nhánh tương ứng trước khi cài đặt. Ví dụ:
 
 ```powershell
 git switch Dung
@@ -220,7 +228,7 @@ Notebook 03 còn tạo `reports/sensitivity_analysis.csv` từ dữ liệu gốc
 
 Notebook 02 và 03 đều yêu cầu `retail_processed.parquet` do pipeline tạo. Khi thay đổi dữ liệu gốc hoặc logic xử lý, chạy lại pipeline trước khi thực thi hai notebook này.
 
-### Bước 5. Classification (W11)
+### Bước 5. Classification
 
 Mở [04_classification_repeat_purchase.ipynb](notebooks/04_classification_repeat_purchase.ipynb), chọn **Restart Kernel & Run All**. Notebook tự chạy lại pipeline từ dữ liệu gốc, ghi bảng `customer_modeling_dataset.parquet` và không tái sử dụng cache cũ. Có thể chỉ tạo dataset bằng `python -m src.classification_features` từ thư mục gốc.
 
@@ -228,18 +236,18 @@ Mở [04_classification_repeat_purchase.ipynb](notebooks/04_classification_repea
 - Mốc quan sát lấy từ timestamp cuối của nguồn giao dịch gốc trước khi làm sạch. Đây là kiểm tra độ phủ thời gian bảo thủ, giả định file nguồn đầy đủ và liên tục; nếu nguồn bị thiếu dòng/ngày thì vẫn cần kiểm chứng nguồn.
 - Cắt theo timestamp gốc rồi mới gom hóa đơn trong lịch sử; cùng cặp customer_id + invoice sau cutoff không tính là đơn mới nếu đã xuất hiện trước cutoff. Cờ mùa/cuối tuần lấy theo thời điểm bắt đầu hóa đơn đã quan sát.
 - Địa lý: mode của country_original đã quan sát trước cutoff; Unknown nếu không có quốc gia hợp lệ, không dùng quốc gia nội suy toàn kỳ.
-- P1: ba cutoff train 01/03, validation 01/06, test 01/09/2011, nhãn 90 ngày không chồng lấn. CV phân tầng trong train chọn ROC-AUC cao nhất (hòa: Average Precision, rồi tên). Fit train, chọn F1 threshold trên validation, giữ nguyên model và threshold khi test. Không dùng test để chọn lại mô hình.
-- Khách có thể lặp qua các snapshot (dự báo khách đã biết), không đại diện cold-start; test tháng 9 đã được xem trong P0 nên kết quả mới là hồi cứu theo thời gian, không phải holdout chưa từng tiếp cận.
+- Ba cutoff train 01/03, validation 01/06, test 01/09/2011, nhãn 90 ngày không chồng lấn. CV phân tầng trong train chọn ROC-AUC cao nhất (hòa: Average Precision, rồi tên). Fit train, chọn F1 threshold trên validation, giữ nguyên model và threshold khi test. Không dùng test để chọn lại mô hình.
+- Khách có thể lặp qua các snapshot (dự báo khách đã biết), không đại diện cold-start; test tháng 9 đã được xem trong quá trình phát triển nên kết quả là hồi cứu theo thời gian, không phải holdout chưa từng tiếp cận.
 - Notebook 04 tạo thêm `customer_modeling_train.parquet`, `customer_modeling_validation.parquet`, `customer_modeling_test.parquet`, bảng CV/metric/importance trong `reports/` và biểu đồ 05, 06. Permutation Importance tính trên validation, không chọn lại feature.
 
-### Bước 6. Regression (W10)
+### Bước 6. Regression
 
-Mở [05_regression_90day_spend.ipynb](notebooks/05_regression_90day_spend.ipynb), Restart Kernel & Run All. Luôn tạo lại từ dữ liệu gốc, cùng cutoff và đơn mới như W11 (không dùng hồ sơ toàn kỳ). Target `target_spend_90d` là gross GBP từ dòng sản phẩm hợp lệ của đơn mới trong 90 ngày, zero nếu không mua; không trừ hoàn trả, không loại ngoại lai.
+Mở [05_regression_90day_spend.ipynb](notebooks/05_regression_90day_spend.ipynb), Restart Kernel & Run All. Luôn tạo lại từ dữ liệu gốc, cùng cutoff và quy tắc đơn mới như Classification (không dùng hồ sơ toàn kỳ). Target `target_spend_90d` là gross GBP từ dòng sản phẩm hợp lệ của đơn mới trong 90 ngày, zero nếu không mua; không trừ hoàn trả, không loại ngoại lai.
 
-- Chọn trước 7 feature số từ W11; preprocessing fit trong CV. Median/mean DummyRegressor, OLS, Ridge và Lasso, alpha và winner chọn theo MAE CV train (hòa RMSE rồi tên), không tune/refit theo validation/test.
+- Chọn trước 7 feature số từ bộ đặc trưng temporal; preprocessing fit trong CV. Median/mean DummyRegressor, OLS, Ridge và Lasso, alpha và winner chọn theo MAE CV train (hòa RMSE rồi tên), không tune/refit theo validation/test.
 - Chặn dự báo âm về zero nhất quán khi CV/validation/test; diagnostics và HC3 cho OLS chưa clip trên train. R² có thể âm, NaN nếu target hằng. CI có điều kiện, không nhân quả; không gán CI OLS cho mô hình penalized.
 - Sinh `customer_regression_train/validation/test.parquet`, `reports/regression_cv.csv`, `regression_validation.csv`, `regression_test.csv`, `regression_ols_coefficients.csv`, `regression_ols_vif.csv`, `regression_ols_diagnostics.csv` và PNG 07–09. CSV/Parquet không commit; chỉ kết quả tổng hợp và hình.
-- Kết quả W10 trên dữ liệu thật: chờ nghiệm thu notebook 05, không sử dụng số liệu giả lập làm kết quả thực.
+- Xem kết quả đánh giá trên dữ liệu thật tại mục 7.5.
 
 ### Bước 7. Kiểm thử
 
@@ -250,11 +258,17 @@ Mở [05_regression_90day_spend.ipynb](notebooks/05_regression_90day_spend.ipynb
 
 Bộ test kiểm tra dữ liệu đầu vào, feature, preprocessor, ranh giới cutoff/horizon, chống leakage và tái tạo dataset. Test Parquet dùng PyArrow và dữ liệu nhỏ tự tạo. Chạy lại toàn bộ notebook trên dữ liệu thật trước khi nghiệm thu; không coi test giả lập là kết quả mô hình thực tế.
 
+### Bước 8. Ethics, Fairness & Bias
+
+Mở [06_ethics_and_bias.ipynb](notebooks/06_ethics_and_bias.ipynb), Restart Kernel & Run All. Đọc lại raw, làm sạch/tích hợp trong bộ nhớ và tái tạo đúng 3 cutoff; tái fit Random Forest và Dummy median đã khóa trong các bước Classification và Regression, tái tạo ngưỡng F1 **chỉ trên validation**. Không chọn lại mô hình, không dùng test để điều chỉnh. Báo cáo UK/International/Unknown, ngưỡng n≥30 và denominator≥10 cho Classification; metric thiếu điều kiện là N/A. Chỉ xuất tổng hợp, không lưu dự báo cấp khách.
+
+Kết quả tạo `reports/w12_*.csv` (ignored) và cập nhật khối kết quả trong [Datasheet](docs/datasheet.md), [Model Card Classification](docs/model_card_classification.md), [Model Card Regression](docs/model_card_regression.md). Kiểm tra kết quả notebook và nội dung ba tài liệu sau khi chạy lại. Nguồn gốc, điều khoản, robots.txt, consent và chính sách lưu giữ có các mục chưa xác minh; nhóm phải xác nhận thủ công những mục đó trước khi nộp, không đánh dấu hoàn thành giả tạo.
+
 ## 7. Kết quả phân tích hiện tại
 
 ### 7.1. Dữ liệu sau xử lý
 
-Các giá trị dưới đây đã được xác nhận bằng pipeline và notebook tại lần nghiệm thu P2 (`0de1dd3`) trên CSV Online Retail II. Sửa audit và mẫu số sensitivity không thay quy tắc chọn giao dịch. Chạy lại toàn bộ năm notebook để nghiệm thu bản W10; số liệu mới chưa được ghi nhận trước khi chạy thật.
+Các giá trị dưới đây được xác nhận bằng pipeline và notebook trên CSV Online Retail II.
 
 | Chỉ số | Kết quả |
 | --- | ---: |
@@ -265,7 +279,7 @@ Các giá trị dưới đây đã được xác nhận bằng pipeline và note
 | Tỷ lệ khớp bảng quốc gia | 99,71% |
 | Tỷ lệ khớp lịch mùa vụ | 100% |
 
-### 7.2. Trực quan hóa dữ liệu (ảnh nghiệm thu P2)
+### 7.2. Trực quan hóa dữ liệu
 
 ![Xu hướng giá trị giao dịch mua và số khách hàng hoạt động theo tháng](reports/figures/03_monthly_revenue_trend.png)
 
@@ -278,9 +292,9 @@ Các biểu đồ khác:
 - [Ma trận tương quan hành vi mua sắm](reports/figures/04_behavior_correlation_heatmap.png)
 
 - Notebook 01: sáu chiều chất lượng (điểm rubric nội bộ), so sánh dòng có/thiếu ID và kiểm tra timestamp đơn hàng. Notebook 02: thống kê location/spread/shape, Pearson và Spearman, thống kê theo khu vực/thị trường. Unknown được tách khỏi Other_International; điểm Accuracy không phải phép đo độ đúng thực tế.
-- [Đánh giá classification theo thời gian](reports/figures/05_classification_evaluation.png) và [Permutation Importance](reports/figures/06_classification_feature_importance.png) được cập nhật khi chạy notebook 04. Không dùng số liệu P0 như kết quả P1.
+- [Đánh giá classification theo thời gian](reports/figures/05_classification_evaluation.png) và [Permutation Importance](reports/figures/06_classification_feature_importance.png) được cập nhật khi chạy notebook 04.
 
-### 7.3. Kiểm định thống kê (nghiệm thu P2)
+### 7.3. Kiểm định thống kê
 
 Ba giả thuyết được kiểm định hai phía với mức ý nghĩa 5%, có hiệu chỉnh Bonferroni cho ba phép kiểm định chính.
 
@@ -290,22 +304,42 @@ Ba giả thuyết được kiểm định hai phía với mức ý nghĩa 5%, c�
 | Nhóm mua chủ yếu trong tháng 9–12 và nhóm còn lại có mức chi tiêu khác nhau không? | Welch's t-test trên `log1p(monetary)` | Có bằng chứng khác biệt trên thang log; nhóm mua chủ yếu trong tháng 9–12 có trung bình log chi tiêu thấp hơn. |
 | Thị trường có liên hệ với việc mua nhiều lần trong kỳ quan sát không? | Pearson Chi-square | Chưa đủ bằng chứng thống kê về mối liên hệ. |
 
-Phân tích độ nhạy sử dụng cửa sổ quan sát 365 ngày để giảm ảnh hưởng của thời lượng quan sát. Chi tiết khoảng tin cậy, effect size, p-value và thiết kế A/B Testing được trình bày trong notebook 03. Độ nhạy P2: H1 chênh lệch trung vị AOV Intl − UK vẫn dương (118,31–128,79 GBP); H2 Peak − Other trên log1p chi tiêu đổi từ −0,3156 (50%) sang +0,1253 (40%), −0,5797 (60%). Không khẳng định chiều H2 ổn định hoặc quan hệ nhân quả. H3 chưa đủ bằng chứng trong các kịch bản khảo sát. 59 khách vượt P99 mang khoảng 32% gross mua hợp lệ. Các giá trị này là kết quả P2; bảng clean_lines mới đếm mọi dòng sạch kể cả khách chỉ hủy, P99 chỉ loại đúng khách vượt ngưỡng.
+Phân tích độ nhạy sử dụng cửa sổ quan sát 365 ngày để giảm ảnh hưởng của thời lượng quan sát. Chi tiết khoảng tin cậy, effect size, p-value và thiết kế A/B Testing được trình bày trong notebook 03. Phân tích độ nhạy: H1 chênh lệch trung vị AOV Intl − UK vẫn dương (118,31–128,79 GBP); H2 Peak − Other trên log1p chi tiêu đổi từ −0,3156 (50%) sang +0,1253 (40%), −0,5797 (60%). Không khẳng định chiều H2 ổn định hoặc quan hệ nhân quả. H3 chưa đủ bằng chứng trong các kịch bản khảo sát. 59 khách vượt P99 mang khoảng 32% gross mua hợp lệ. Cột `clean_lines` đếm mọi dòng sạch kể cả khách chỉ hủy; kịch bản P99 chỉ loại khách vượt ngưỡng.
 
-### 7.4. Classification – kết quả nghiệm thu P2
+### 7.4. Kết quả Classification
 
-Random Forest được chọn từ CV trên train tháng 3/2011 (ROC-AUC 0,7906). Threshold 0,4805 chọn trên validation tháng 6; temporal test tháng 9 gồm 5.225 khách, accuracy 73,01%, ROC-AUC 0,7936, F1 0,6579, AP 0,7639. Đây là kết quả được xác nhận lại ở commit `0de1dd3` sau P2. Không tối ưu lại theo test.
+Random Forest được chọn từ CV trên train tháng 3/2011 (ROC-AUC 0,7906). Threshold 0,4805 chọn trên validation tháng 6; temporal test tháng 9 gồm 5.225 khách, accuracy 73,01%, ROC-AUC 0,7936, F1 0,6579, AP 0,7639. Không tối ưu lại theo test.
 
-## 8. Hướng phát triển
+### 7.5. Kết quả Regression
+
+Temporal test tháng 9/2011, n=5.225. Chọn winner theo MAE CV train trước khi xem test.
+
+| Mô hình | MAE GBP | RMSE GBP | R² |
+|---|---:|---:|---:|
+| Dummy median (winner) | 515,34 | 3144,94 | -0,0276 |
+| Dummy mean | 597,42 | 3108,18 | -0,0037 |
+| OLS | 495,91 | 2922,46 | 0,1127 |
+| Ridge alpha=1000 | 484,85 | 2979,06 | 0,0779 |
+| Lasso alpha=100 | 493,85 | 2986,96 | 0,0731 |
+
+Dummy median dự báo 0 GBP mọi khách; không khuyến nghị dùng để dự báo doanh thu hoặc phân khúc. OLS/Ridge tốt hơn ở một số metric test nhưng không chọn lại winner. 57,21% target test bằng 0; chi tiêu lệch phải, residual OLS vi phạm normality và equal variance. Test hồi cứu đã xem; cải tiến tương lai cần giao thức đánh giá mới.
+
+### 7.6. Đạo đức, sai lệch và quyền riêng tư
+
+Trên tập test 5.225 khách, nhóm UK có 4.773 khách, International có 445 khách và Unknown có 7 khách. Recall của Classification lần lượt là 59,87% và 68,10% ở hai nhóm đủ cỡ mẫu; MAE của Regression là 467,84 GBP và 1.032,93 GBP. Không công bố metric của nhóm Unknown vì cỡ mẫu nhỏ. Thử nghiệm tổng quát hóa và suppression đạt k tối thiểu bằng 10 trên bộ quasi-identifier được chọn, giữ lại 5.053 khách; không thay đổi tập đánh giá mô hình và không chứng minh dữ liệu gốc đã ẩn danh.
+
+Xem kết quả và giới hạn chi tiết tại [Datasheet](docs/datasheet.md), [Model Card Classification](docs/model_card_classification.md) và [Model Card Regression](docs/model_card_regression.md).
+
+## 8. Trạng thái triển khai
 
 | Giai đoạn | Trạng thái |
 | --- | --- |
-| Thu thập, kiểm toán và xử lý dữ liệu (W1–W5) | Đã triển khai |
-| Thống kê mô tả và trực quan hóa (W6–W7) | Đã triển khai |
-| Statistical Inference & A/B Testing (W9) | Đã triển khai kiểm định và thiết kế thí nghiệm đề xuất |
-| Regression Analysis (W10) | Đã triển khai dự báo chi tiêu 90 ngày, CV và LINE; chờ nghiệm thu dữ liệu thật |
-| Classification (W11) | Đã nghiệm thu temporal evaluation, model selection và permutation importance ở P2 |
-| Ethics & Bias (W12) | Kế hoạch đánh giá giới hạn và sai lệch mô hình |
+| Thu thập, kiểm toán và xử lý dữ liệu | Đã triển khai |
+| Thống kê mô tả và trực quan hóa | Đã triển khai |
+| Statistical Inference & A/B Testing | Đã triển khai kiểm định và thiết kế thí nghiệm đề xuất |
+| Regression Analysis | Đã đánh giá dự báo chi tiêu 90 ngày, CV và LINE; chất lượng dự báo thấp |
+| Classification | Đã đánh giá theo thời gian, lựa chọn mô hình và permutation importance |
+| Ethics & Bias | Đã đánh giá theo nhóm và quyền riêng tư; có datasheet và model cards |
 
 Các mô hình dự báo tương lai cần xây dựng đặc trưng từ dữ liệu trước mốc dự báo, chia tập theo thời gian và kiểm tra data leakage. Hồ sơ khách hàng toàn kỳ hiện tại phục vụ phân tích mô tả, không sử dụng trực tiếp làm đầu vào dự báo tương lai.
 
@@ -315,13 +349,8 @@ Các mô hình dự báo tương lai cần xây dựng đặc trưng từ dữ l
 - Loại giao dịch thiếu Customer ID có thể gây sai lệch chọn mẫu; khách mua buôn có thể ảnh hưởng đến phân phối chi tiêu.
 - Nhóm khu vực, lịch mùa vụ và vùng vận chuyển là các quy ước phân tích, không phải số liệu chi phí vận chuyển hay dữ liệu khuyến mại thực tế.
 - Kiểm định thống kê trên dữ liệu quan sát không chứng minh quan hệ nhân quả. Dataset không chứa phân nhóm thử nghiệm ngẫu nhiên; A/B Testing hiện là thiết kế đề xuất.
-
-## Trạng thái P2
-
-- Dùng chung quy tắc phát hiện quốc gia chưa biết; W9 vẫn loại Mixed/Unknown, W11 chọn quốc gia đã biết phổ biến trước cutoff.
-- Kiểm tra khóa, giá, dấu số lượng, cờ hủy và tích quantity × price ở đầu vào đặc trưng temporal.
-- Bảng Chi-square suy biến hoặc mẫu không đủ điều kiện được báo không đủ điều kiện, không coi là p=1.
-- P2 đã nghiệm thu 53/53 test tại máy nhóm và bốn notebook. Bản W10 bỏ mọi dòng mẫu khỏi audit, thống nhất missing token, sửa phạm vi clean_lines. Output notebook 01 và bảng độ nhạy cũ được xóa có chủ đích; chạy lại trước khi nộp. Không commit CSV/Parquet hoặc ID khách hàng mẫu. Lịch sử Git cũ có thể vẫn chứa output mẫu; không tuyên bố đã xóa lịch sử, không rewrite main.
+- Báo cáo chỉ công bố kết quả tổng hợp; không commit CSV/Parquet chứa định danh. Lịch sử Git cũ có thể vẫn chứa output mẫu.
+- Các điều khoản nguồn chưa xác minh và chính sách lưu giữ cần được nhóm xác nhận trước khi nộp.
 
 ## Tài liệu tham khảo
 
