@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import RobustScaler, OneHotEncoder, FunctionTransformer
+from sklearn.preprocessing import RobustScaler, StandardScaler, OneHotEncoder, FunctionTransformer
 from sklearn.impute import SimpleImputer
 
 
@@ -121,7 +121,7 @@ def load_raw_data(raw_dir: str = "data/raw") -> pd.DataFrame:
 
 def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Làm sạch dữ liệu giao dịch và ghi nhật ký xử lý (Cleaning Log)."""
-    df = df_raw.copy()
+    df = validate_raw_data(df_raw, "clean_transactions")
     logs = []
 
     def add_log(step, col, finding, action, rows, why):
@@ -215,6 +215,8 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
             mask_invalid.sum(), "Tránh làm sai lệch doanh thu và giá trị giỏ hàng")
 
     df["total_amount"] = df["quantity"] * df["price"]
+    if not np.isfinite(df["total_amount"].to_numpy(dtype=float)).all():
+        raise ValueError("total_amount chứa giá trị không hữu hạn.")
     return df, pd.DataFrame(logs)
 
 
@@ -254,26 +256,61 @@ def integrate_external_sources(df: pd.DataFrame) -> pd.DataFrame:
     return df_merged
 
 
-def build_sklearn_preprocessor(num_cols: list[str], cat_cols: list[str]) -> ColumnTransformer:
-    """Tạo bộ biến đổi Scikit-Learn chống rò rỉ dữ liệu (fit trên train, transform trên test)."""
-    numeric_transformer = Pipeline(steps=[
+FORBIDDEN_MODEL_COLS = {"customer_id", "invoice", "invoice_ts", "invoice_date", "cutoff_date", "country_original"}
+
+
+def _log1p_nonnegative(x):
+    """log1p có kiểm tra: báo lỗi nếu gặp giá trị âm thay vì sinh NaN âm thầm."""
+    arr = np.asarray(x, dtype=float)
+    if np.nanmin(arr, initial=0.0) < 0:
+        raise ValueError("Biến đưa vào log1p chứa giá trị âm; hãy chuyển sang nhóm linear_num_cols.")
+    return np.log1p(arr)
+
+
+def build_sklearn_preprocessor(
+    log_num_cols: list[str],
+    cat_cols: list[str],
+    linear_num_cols: list[str] | None = None,
+) -> ColumnTransformer:
+    """
+    Bộ biến đổi Scikit-Learn chống rò rỉ dữ liệu (fit trên train, transform trên test).
+
+    - log_num_cols: biến số lệch phải, không âm -> median impute -> log1p -> RobustScaler.
+    - linear_num_cols: biến tỷ lệ/bị chặn -> median impute -> StandardScaler.
+    - cat_cols: biến phân loại -> impute 'Missing' -> One-Hot.
+    - Mọi cột còn lại (customer_id, target_repeat_90d, ...) bị loại bỏ (remainder='drop').
+    """
+    linear_num_cols = list(linear_num_cols or [])
+    log_num_cols, cat_cols = list(log_num_cols), list(cat_cols)
+
+    all_cols = log_num_cols + linear_num_cols + cat_cols
+    forbidden = sorted(c for c in all_cols if c in FORBIDDEN_MODEL_COLS or c.startswith("target_"))
+    if forbidden:
+        raise ValueError(f"Cột bị cấm dùng làm đặc trưng (định danh hoặc nhãn): {forbidden}")
+    duplicated = sorted({c for c in all_cols if all_cols.count(c) > 1})
+    if duplicated:
+        raise ValueError(f"Cột xuất hiện ở nhiều nhóm đặc trưng: {duplicated}")
+
+    log_transformer = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="median")),
-        ("log_transform", FunctionTransformer(np.log1p, validate=False)),
+        ("log_transform", FunctionTransformer(_log1p_nonnegative, feature_names_out="one-to-one")),
         ("scaler", RobustScaler()),
     ])
-
+    linear_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+    ])
     categorical_transformer = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="constant", fill_value="Missing")),
         ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
 
-    return ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, num_cols),
-            ("cat", categorical_transformer, cat_cols),
-        ],
-        remainder="passthrough",
-    )
+    transformers = [("log_num", log_transformer, log_num_cols)]
+    if linear_num_cols:
+        transformers.append(("linear_num", linear_transformer, linear_num_cols))
+    transformers.append(("cat", categorical_transformer, cat_cols))
+
+    return ColumnTransformer(transformers=transformers, remainder="drop")
 
 
 def run_pipeline(raw_dir: str = "data/raw", processed_dir: str = "data/processed", reports_dir: str = "reports"):
@@ -282,6 +319,9 @@ def run_pipeline(raw_dir: str = "data/raw", processed_dir: str = "data/processed
 
     print("1. Đang đọc dữ liệu gốc...")
     df_raw = load_raw_data(raw_dir)
+    # Mốc cuối quan sát lấy từ nguồn gốc trước khi lọc giao dịch;
+    # dùng timestamp cuối như ranh giới bảo thủ, không suy ra từ bảng đã lọc.
+    observed_until = df_raw["InvoiceDate"].max()
 
     print("2. Đang làm sạch dữ liệu & tạo Cleaning Log...")
     df_clean, log_df = clean_transactions(df_raw)
@@ -293,6 +333,7 @@ def run_pipeline(raw_dir: str = "data/raw", processed_dir: str = "data/processed
     out_path = os.path.join(processed_dir, "retail_processed.parquet")
     df_final.to_parquet(out_path, index=False)
     print(f"4. Hoàn tất! Đã lưu {len(df_final):,} dòng vào '{out_path}' và cập nhật '{reports_dir}/cleaning_log.csv'.")
+    return observed_until
 
 
 if __name__ == "__main__":

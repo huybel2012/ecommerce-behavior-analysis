@@ -83,14 +83,16 @@ ecommerce-behavior-analysis/
 │   └── processed/                          # Dữ liệu Parquet (tự sinh)
 │       ├── retail_cleaned_w4.parquet
 │       ├── retail_processed.parquet
-│       └── customer_profiles.parquet
+│       ├── customer_profiles.parquet
+│       └── customer_modeling_dataset.parquet
 ├── docs/
 │   ├── data_dictionary.md                  # Từ điển dữ liệu
 │   └── data_sources.md                     # Nguồn dữ liệu và metadata
 ├── notebooks/
 │   ├── 01_data_audit_and_cleaning.ipynb       # Kiểm toán và làm sạch
 │   ├── 02_exploratory_data_analysis.ipynb     # EDA và trực quan hóa
-│   └── 03_statistical_inference.ipynb         # Kiểm định thống kê
+│   ├── 03_statistical_inference.ipynb         # Kiểm định thống kê
+│   └── 04_classification_repeat_purchase.ipynb # Phân loại
 ├── reports/
 │   ├── figures/                            # Biểu đồ EDA
 │   ├── cleaning_log.csv                    # Nhật ký xử lý (tự sinh)
@@ -99,11 +101,14 @@ ecommerce-behavior-analysis/
 │   ├── __init__.py
 │   ├── utils.py                            # Hàm kiểm toán dữ liệu
 │   ├── pipeline.py                         # Nạp, làm sạch và tích hợp
-│   └── customer_features.py                # Đặc trưng cấp khách hàng
+│   ├── customer_features.py                # Đặc trưng cấp khách hàng (EDA)
+│   └── classification_features.py          # Đặc trưng trước cutoff và nhãn 90 ngày
 ├── tests/
-│   └── test_data_contract.py                # Kiểm thử dữ liệu và đặc trưng
+│   ├── test_data_contract.py                # Kiểm thử dữ liệu và đặc trưng
+│   └── test_classification_contract.py      # Kiểm thử cutoff/preprocessor
 ├── .gitignore
 ├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
@@ -204,13 +209,24 @@ Mở [03_statistical_inference.ipynb](notebooks/03_statistical_inference.ipynb),
 
 Notebook 02 và 03 đều yêu cầu `retail_processed.parquet` do pipeline tạo. Khi thay đổi dữ liệu gốc hoặc logic xử lý, chạy lại pipeline trước khi thực thi hai notebook này.
 
-### Bước 5. Kiểm thử
+### Bước 5. Classification (W11)
+
+Mở [04_classification_repeat_purchase.ipynb](notebooks/04_classification_repeat_purchase.ipynb), chọn **Restart Kernel & Run All**. Notebook tự chạy lại pipeline từ dữ liệu gốc, ghi bảng `customer_modeling_dataset.parquet` và không tái sử dụng cache cũ. Có thể chỉ tạo dataset bằng `python -m src.classification_features` từ thư mục gốc.
+
+- Cutoff: 01/09/2011 00:00; nhãn mua lại trong `[cutoff, cutoff + 90 ngày)`, kết thúc loại trừ lúc 00:00 ngày 30/11/2011.
+- Mốc quan sát lấy từ timestamp cuối của nguồn giao dịch gốc trước khi làm sạch. Đây là kiểm tra độ phủ thời gian bảo thủ, giả định file nguồn đầy đủ và liên tục; nếu nguồn bị thiếu dòng/ngày thì vẫn cần kiểm chứng nguồn.
+- Cắt theo timestamp gốc rồi mới gom hóa đơn trong lịch sử; cùng cặp customer_id + invoice sau cutoff không tính là đơn mới nếu đã xuất hiện trước cutoff. Cờ mùa/cuối tuần lấy theo thời điểm bắt đầu hóa đơn đã quan sát.
+- Địa lý: mode của country_original đã quan sát trước cutoff; Unknown nếu không có quốc gia hợp lệ, không dùng quốc gia nội suy toàn kỳ.
+- Chia ngẫu nhiên theo khách hàng tại cùng cutoff; chưa đánh giá tổng quát hóa ở cutoff khác. HistGradientBoosting là ứng viên định trước, không khẳng định tốt nhất trước khi đối chiếu kết quả CV.
+
+### Bước 6. Kiểm thử
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Bộ kiểm thử gồm 5 test về đọc CSV/XLSX, schema, UTF-8, phân nhóm thị trường và tính tỷ lệ theo hóa đơn. Bộ test sử dụng dữ liệu nhỏ tự tạo, không yêu cầu tải dataset đầy đủ.
+Bộ test kiểm tra dữ liệu đầu vào, feature, preprocessor, ranh giới cutoff/horizon, chống leakage và tái tạo dataset. Test Parquet dùng PyArrow và dữ liệu nhỏ tự tạo. Chạy lại toàn bộ notebook trên dữ liệu thật trước khi nghiệm thu; không coi test giả lập là kết quả mô hình thực tế.
 
 ## 7. Kết quả phân tích hiện tại
 

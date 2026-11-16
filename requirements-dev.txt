@@ -1,0 +1,2 @@
+# Install in the same environment as requirements.txt.
+pytest>=8,<10

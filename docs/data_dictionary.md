@@ -78,3 +78,25 @@ Unknown gồm rỗng, unspecified, unknown, nan, none, european community; Chann
 ## 4. Cleaning log
 
 `reports/cleaning_log.csv` (pipeline) và `reports/cleaning_log_w4.csv` (notebook 01, thêm IQR). Mỗi hàng là một bước, `Step` (mã), `Column` (trường), `Finding` (phát hiện), `Action` (hành động), `Rows` (số bản ghi liên quan, không nhất thiết bị xóa), `Why` (lý do). Không cộng tất cả Rows để suy ra số dòng loại vì có bước chuẩn hóa, gắn cờ, chẩn đoán và có thể trùng tập bản ghi.
+
+## W11: Modeling dataset theo cutoff
+
+`customer_modeling_dataset.parquet`: một dòng cho mỗi khách có ít nhất một đơn mua hợp lệ trước cutoff. Mọi feature chỉ dùng lịch sử trước cutoff, không dùng hồ sơ toàn kỳ của EDA.
+
+| Cột | Định nghĩa |
+|---|---|
+| `customer_id` | Khóa khách hàng, không đưa vào X. |
+| `recency_days` | Số ngày thực từ timestamp đơn mua cuối đã quan sát đến cutoff. |
+| `observation_span_days` | Số ngày từ đơn đầu đã quan sát đến cutoff, tối thiểu 1 để tính tỷ suất. |
+| `frequency` | Số hóa đơn mua khác nhau trong lịch sử. |
+| `total_items`, `unique_products` | Tổng số lượng và số mã hàng khác nhau của các dòng mua lịch sử. |
+| `gross_valid_revenue`, `avg_order_value` | Tổng giá trị mua và trung bình giá trị đơn mua, GBP, chưa trừ hoàn trả. |
+| `avg_basket_size`, `items_per_sku` | Số sản phẩm trung bình mỗi đơn; tổng số lượng / số mã khác nhau. |
+| `purchase_rate_per_30d` | Frequency / observation_span_days × 30. |
+| `interpurchase_mean_days` | Khoảng cách trung bình giữa các đơn; nếu chỉ một đơn thì dùng observation_span_days. |
+| `weekend_ratio`, `peak_month_ratio` | Tỷ lệ hóa đơn mua bắt đầu vào cuối tuần hoặc tháng 9–12. |
+| `cancelled_invoices`, `cancel_rate` | Số đơn hủy lịch sử và tỷ lệ trên toàn bộ hóa đơn lịch sử. |
+| `region`, `shipping_zone` | Hai nhãn lấy từ cùng quốc gia gốc phổ biến nhất đã quan sát trước cutoff; Unknown nếu không biết. |
+| `target_repeat_90d` | 1 nếu có hóa đơn mua mới trong [cutoff, cutoff + 90 ngày), ngược lại 0 khi nguồn phủ đủ cửa sổ. Dòng tiếp nối hóa đơn cũ không tính là đơn mới. Không đưa vào X. |
+
+Cutoff mặc định 01/09/2011; thời điểm quan sát lấy từ dữ liệu gốc trước lọc. Không tái sử dụng kết quả nội suy quốc gia toàn kỳ của EDA cho mô hình.
