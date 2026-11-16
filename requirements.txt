@@ -1,10 +1,12 @@
-pandas
-numpy
-openpyxl
-pyarrow
-scikit-learn
-matplotlib
-seaborn
-scipy
-ipykernel
-jupyter
+# Python 3.11.9; pin theo log cai dat Project 2, PyArrow theo ban da sua loi.
+# Xac nhan lai bang pip check va Restart & Run All tren may nhom.
+numpy==1.26.4
+pandas==2.3.3
+pyarrow==19.0.1
+openpyxl==3.1.5
+scikit-learn==1.9.1
+matplotlib==3.11.2
+seaborn==0.13.2
+scipy==1.17.1
+ipykernel==7.4.0
+jupyter==1.1.1

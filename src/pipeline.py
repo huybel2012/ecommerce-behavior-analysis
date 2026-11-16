@@ -8,7 +8,7 @@ from sklearn.impute import SimpleImputer
 
 
 def get_country_metadata() -> pd.DataFrame:
-    """Bảng tham chiếu thông tin thị trường theo quốc gia (nguồn dữ liệu tích hợp)."""
+    """Bảng quy ước phân nhóm thủ công của dự án; xem docs/data_sources.md."""
     data = [
         # Domestic
         ("United Kingdom", "Domestic_UK", "UK", "GBP", "Domestic"),
@@ -64,7 +64,7 @@ def get_country_metadata() -> pd.DataFrame:
 
 
 def get_peak_season_calendar() -> pd.DataFrame:
-    """Bảng tham chiếu mùa vụ bán lẻ & cao điểm lễ hội theo tháng."""
+    """Quy ước mùa vụ và tháng cao điểm do nhóm chọn, không phải dữ liệu thực nghiệm độc lập."""
     return pd.DataFrame({
         "month": list(range(1, 13)),
         "season": [
@@ -75,24 +75,48 @@ def get_peak_season_calendar() -> pd.DataFrame:
     })
 
 
-def load_raw_data(raw_dir: str = "data/raw") -> pd.DataFrame:
-    """Đọc dữ liệu gốc từ thư mục data/raw mà không làm thay đổi file gốc."""
-    files = os.listdir(raw_dir)
-    csv_files = [f for f in files if f.endswith(".csv")]
-    xlsx_files = [f for f in files if f.endswith(".xlsx")]
+RAW_COLUMNS = ["Invoice", "StockCode", "Description", "Quantity", "InvoiceDate", "Price", "Customer ID", "Country"]
 
-    if csv_files:
-        return pd.read_csv(os.path.join(raw_dir, csv_files[0]), encoding="ISO-8859-1")
-    if xlsx_files:
-        path = os.path.join(raw_dir, xlsx_files[0])
-        return pd.concat(
-            [
-                pd.read_excel(path, sheet_name="Year 2009-2010"),
-                pd.read_excel(path, sheet_name="Year 2010-2011"),
-            ],
-            ignore_index=True,
-        )
-    raise FileNotFoundError(f"Không tìm thấy file .csv hoặc .xlsx trong {raw_dir}")
+
+def validate_raw_data(df: pd.DataFrame, source: str) -> pd.DataFrame:
+    """Kiểm tra schema và kiểu dữ liệu trước khi làm sạch; cho phép thiếu CID/mô tả."""
+    if df.empty or df.columns.has_duplicates or set(df.columns) != set(RAW_COLUMNS):
+        raise ValueError(f"{source}: cần bảng không rỗng với đúng 8 cột {RAW_COLUMNS}; nhận {list(df.columns)}")
+    df = df[RAW_COLUMNS].copy()
+    for col in ["Quantity", "Price", "Customer ID"]:
+        df[col] = pd.to_numeric(df[col], errors="raise")
+        values = df[col].dropna().to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError(f"{source}: {col} chứa giá trị không hữu hạn.")
+        if col in ["Quantity", "Customer ID"] and not np.equal(values, np.floor(values)).all():
+            raise ValueError(f"{source}: {col} phải là số nguyên.")
+    df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors="raise")
+    required = ["Invoice", "StockCode", "Quantity", "Price", "InvoiceDate", "Country"]
+    if df[required].isna().any().any():
+        raise ValueError(f"{source}: thiếu giá trị ở cột giao dịch bắt buộc.")
+    for col in ["Invoice", "StockCode", "Country"]:
+        if df[col].astype(str).str.strip().eq("").any():
+            raise ValueError(f"{source}: {col} có chuỗi rỗng.")
+    return df
+
+
+def load_raw_data(raw_dir: str = "data/raw") -> pd.DataFrame:
+    """Ưu tiên CSV UTF-8; chỉ chấp nhận tên file Online Retail II đã biết."""
+    from pathlib import Path
+    directory = Path(raw_dir)
+    csv_path = directory / "online_retail_II.csv"
+    excel_path = directory / "online_retail_II.xlsx"
+    if csv_path.is_file():
+        df = validate_raw_data(pd.read_csv(csv_path, encoding="utf-8-sig"), str(csv_path))
+    elif excel_path.is_file():
+        sheets = ["Year 2009-2010", "Year 2010-2011"]
+        parts = pd.read_excel(excel_path, sheet_name=sheets)
+        df = pd.concat([validate_raw_data(parts[name], f"{excel_path.name}: {name}")
+                        for name in sheets], ignore_index=True)
+    else:
+        raise FileNotFoundError(f"Cần {csv_path} hoặc {excel_path}; không tự chọn file khác.")
+    print(f"Nguồn: {csv_path.name if csv_path.is_file() else excel_path.name} | {len(df):,} dòng")
+    return df
 
 
 def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -125,7 +149,7 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     df = df.drop_duplicates().reset_index(drop=True)
     add_log("1.2", "all", f"{n_dups:,} dòng trùng lặp hoàn toàn",
             "Xóa các dòng trùng lặp, giữ lại bản ghi đầu tiên",
-            n_dups, "Lỗi xuất dữ liệu lặp từ hệ thống giao dịch")
+            n_dups, "Giả định các dòng giống hệt là trùng bản ghi; không xác minh được nguồn gốc từng dòng")
 
     # 3. Xử lý thiếu customer_id
     n_miss_cid = df["customer_id"].isna().sum()
@@ -142,6 +166,9 @@ def clean_transactions(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     add_log("1.4", "description", f"{mask_desc.sum():,} dòng thiếu hoặc chứa ký tự lỗi",
             "Gán nhãn 'UNKNOWN_PRODUCT' thay vì xóa dòng",
             mask_desc.sum(), "Giữ lại lịch sử chi tiêu và tần suất đơn hàng")
+
+    # Giữ quốc gia quan sát gốc để các phân tích theo cửa sổ thời gian không dùng nhãn nội suy toàn kỳ.
+    df["country_original"] = df["country"]
 
     # 5. Suy diễn quốc gia 'Unspecified' theo lịch sử từng khách hàng
     n_unspec = (df["country"] == "Unspecified").sum()
@@ -196,7 +223,7 @@ def integrate_external_sources(df: pd.DataFrame) -> pd.DataFrame:
     # Merge 1: Thông tin khu vực & tiền tệ theo quốc gia
     country_meta = get_country_metadata()
     len_before_1 = len(df)
-    df_merged = df.merge(country_meta, on="country", how="left")
+    df_merged = df.merge(country_meta, on="country", how="left", validate="many_to_one")
     len_after_1 = len(df_merged)
 
     unmatched_mask = df_merged["region"].isna()
@@ -213,13 +240,13 @@ def integrate_external_sources(df: pd.DataFrame) -> pd.DataFrame:
 
     # Merge 2: Thông tin mùa vụ mua sắm theo tháng
     df_merged["month"] = df_merged["invoice_date"].dt.month
-    df_merged["day_of_week"] = df_merged["invoice_date"].dt.dayofweek
+    df_merged["day_of_week"] = df_merged["invoice_date"].dt.day_of_week
     df_merged["hour"] = df_merged["invoice_date"].dt.hour
     df_merged["is_weekend"] = (df_merged["day_of_week"] >= 5).astype(int)
 
     season_meta = get_peak_season_calendar()
     len_before_2 = len(df_merged)
-    df_merged = df_merged.merge(season_meta, on="month", how="left")
+    df_merged = df_merged.merge(season_meta, on="month", how="left", validate="many_to_one")
     len_after_2 = len(df_merged)
     match_rate_2 = (1 - df_merged["season"].isna().mean()) * 100
     print(f"[Merge 2 - Season Calendar]  Trước: {len_before_2:,} | Sau: {len_after_2:,} | Tỷ lệ khớp: {match_rate_2:.2f}%")
