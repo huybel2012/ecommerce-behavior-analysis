@@ -5,8 +5,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from src.regression_evaluation import metrics
 from src.pipeline import unknown_country_mask
 
-MIN_GROUP = 30
-MIN_SUPPORT = 10
+from src.publication import MIN_GROUP, MIN_SUPPORT, public_labels
 MARKETS = ('UK', 'International', 'Unknown')
 PUBLIC_OTHER = 'Non-UK / Unknown'
 PUBLIC_MARKETS = ('UK', PUBLIC_OTHER)
@@ -148,12 +147,21 @@ def country_selection(country_table):
     country = out.columns[0]
     out[country] = out[country].astype('string').str.strip()
     out.loc[unknown_country_mask(out[country]), country] = 'Unknown'
+    split = out[['Known_ID', 'Missing_ID']]
+    if (not all(pd.api.types.is_numeric_dtype(split[col]) for col in split)
+            or not np.isfinite(split.to_numpy(dtype=float)).all()
+            or (split < 0).any().any() or (split % 1 != 0).any().any()):
+        raise ValueError('Invalid purchase-line counts.')
     out = out.groupby(country, dropna=False)[['Known_ID', 'Missing_ID']].sum()
+    counts = out.Known_ID + out.Missing_ID
+    mapping = public_labels(counts)
+    if mapping is None:
+        return pd.DataFrame(columns=['Known_ID','Missing_ID','total','missing_share','known_line_share']).rename_axis(country)
+    out = out.loc[counts > 0].groupby(out.index.map(mapping)).sum()
+    out.index.name = country
     out['total'] = out.Known_ID + out.Missing_ID
-    out['missing_share'] = out.Missing_ID / out.total.where(out.total > 0)
+    out['missing_share'] = out.Missing_ID / out.total
     out['known_line_share'] = out.Known_ID / (out.Known_ID.sum() if out.Known_ID.sum() else np.nan)
-    # No country-level rates/ID split for very small line denominators.
-    out.loc[out.total < MIN_SUPPORT, ['Known_ID','Missing_ID','missing_share','known_line_share']] = np.nan
     return out.sort_values('total', ascending=False)
 
 

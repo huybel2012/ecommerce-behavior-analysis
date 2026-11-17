@@ -284,6 +284,8 @@ Các giá trị dưới đây được xác nhận bằng pipeline và notebook 
 
 ![Xu hướng giá trị giao dịch mua và số khách hàng hoạt động theo tháng](reports/figures/03_monthly_revenue_trend.png)
 
+[Mở báo cáo HTML offline](index.html). Báo cáo tĩnh dựa trên kết quả lịch sử đã lưu; khi thay kết quả notebook cần đối chiếu và cập nhật số liệu HTML.
+
 *Biểu đồ theo tháng chỉ tính giao dịch mua hợp lệ; tháng 12/2011 chưa có đủ dữ liệu cả tháng.*
 
 Các biểu đồ khác:
@@ -294,6 +296,8 @@ Các biểu đồ khác:
 
 - Notebook 01: sáu chiều chất lượng (điểm rubric nội bộ), so sánh dòng có/thiếu ID và kiểm tra timestamp đơn hàng. Notebook 02: thống kê location/spread/shape, Pearson và Spearman, thống kê theo khu vực/thị trường. Unknown được tách khỏi Other_International; điểm Accuracy không phải phép đo độ đúng thực tế.
 - [Đánh giá classification theo thời gian](reports/figures/05_classification_evaluation.png) và [Permutation Importance](reports/figures/06_classification_feature_importance.png) được cập nhật khi chạy notebook 04.
+
+Quy tắc công bố mô tả dùng chung: bảng quốc gia (dòng mua) và khu vực (khách distinct) gộp nhóm dưới 30 quan sát thành nhóm có ít nhất hai thành phần và ít nhất 30 quan sát; không công bố bảng phân nhóm chồng lấn của EDA. Biểu đồ khu vực chỉ hiển thị trung vị của nhóm có tên đủ mẫu. Quy tắc không thay đổi dữ liệu phân tích/huấn luyện và không bảo đảm ẩn danh hoặc thu hồi thông tin đã công bố trong lịch sử Git.
 
 ### 7.3. Kiểm định thống kê
 

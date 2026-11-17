@@ -9,20 +9,25 @@ import json
 import sys
 from importlib.metadata import version, PackageNotFoundError
 import numpy as np
+from numbers import Real
 
 RAW_SHA256 = '32569a66f3842a82b0d8c4d63b263c5d98a76bde5d1f65c6c01bf457e541d3a9'
 LOCKED_VERSIONS = {'numpy': '1.26.4', 'pandas': '2.3.3',
                    'scipy': '1.17.1', 'scikit-learn': '1.9.1'}
-SOURCE_LOCK = {'notebooks/04_classification_repeat_purchase.ipynb': '165d1e7208d3fd761f7a427ee70d936543720cdfea236dfafd5c0ec8a7d9bf27',
+SOURCE_LOCK = {
+ 'src/publication.py': 'eda40f9828f8eef926fa025f704f471ecb288c128bdff5b6248e4e24191b9fb3',
+ 'notebooks/01_data_audit_and_cleaning.ipynb': '173fd04e4e25b5db632e29184ec8994dcb77227a17052e93792733b0f9b42689',
+ 'notebooks/02_exploratory_data_analysis.ipynb': '03da3bfe1bd53674e6cdd016f0bbe163337d1f78333fb50b81c6f134e6e8eee7',
+ 'notebooks/04_classification_repeat_purchase.ipynb': '165d1e7208d3fd761f7a427ee70d936543720cdfea236dfafd5c0ec8a7d9bf27',
  'notebooks/05_regression_90day_spend.ipynb': '6b7ba9a5a30333c9f9c7b229161075e8d9e769107d719b5d9fdfc0e2a60692bb',
- 'notebooks/06_ethics_and_bias.ipynb': '8b2a3c5ecb17a808d248653be1d0371a0abe4611535aebe3cc4d723540e75154',
+ 'notebooks/06_ethics_and_bias.ipynb': '72663eaf3d9234a2084cc291a36bdbce0a3ec3fbda36535c21b2714d1b9b9724',
  'requirements.txt': '8fb91a14599748135966d761099a57ab89a6f6102d3623595feb21a77b90a5b3',
  'src/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
  'src/classification_evaluation.py': 'c2460337b54c215297a874ff03b47ad3d8af4bb760c8cadeab8ed2f08031beb5',
  'src/classification_features.py': 'a416e0d4062e144db3ed3c85b439d3edd5e73552c33dfc3e9c7a267724fac9e8',
  'src/customer_features.py': '6b17ece91b67d7b47b2edb216682907a3ef11e74bcf30814e3c6804949b46b04',
  'src/data_quality.py': 'd8aa5ef1dd139ec4ebc1d86a2640694cd35f87fe5a3fcebccd5a2ffa4805dff3',
- 'src/fairness_evaluation.py': '1a4cbe07274ac02b55fc2b3329e7bbd82d9872871624fd1fcafdeda28e318208',
+ 'src/fairness_evaluation.py': 'a4761a57ac532851ad40968a3f98526cba332f77fa9cbbc990b2cd7b0c8f8516',
  'src/pipeline.py': 'd85051cc48b94979ebb8d80a977f2fc59caa67268fd4c90c3e67e86462866507',
  'src/regression_evaluation.py': '776362fb9051a179a42ba44f2c60bc427581df2001a377b5464e861607399dbc',
  'src/robustness.py': 'b6097870cd65f0c9af6408199e70a18bcdc3aeba2f0b28502cdc0f9c6826695a',
@@ -104,7 +109,10 @@ def metric_issues(actual, expected, label):
         # Rounded published values: absolute +/- half a final decimal place.
         # Counts/flags exact; threshold stored to 12 significant digits.
         tol = 1e-12 if key == 'threshold' else (0 if isinstance(value, int) else 5.00001e-5)
-        if key not in actual or not np.isclose(actual[key], value, rtol=0, atol=tol):
+        if (key not in actual or not isinstance(actual[key], Real)
+                or isinstance(actual[key], (bool, np.bool_))
+                or not np.isfinite(actual[key])
+                or not np.isclose(actual[key], value, rtol=0, atol=tol)):
             issues.append(f'{label}: {key}')
     return issues
 
@@ -145,8 +153,8 @@ def reference_issues(root, clf_actual, reg_actual, privacy):
     return issues
 
 # The new pool is computed from the original individual-level predictions, not
-# by averaging the old published group metrics. Known reference checks retain
-# only Overall and UK; no separate International reference table is released.
+# by averaging the old published group metrics. Pool reference rows below are
+# from the saved 26fe794 notebook 06 (real data), rounded to four decimals.
 PUBLIC_COUNTS = {'train': [4149, 364], 'validation': [4503, 406], 'test': [4773, 452]}
 PUBLIC_GROUPS = ['Overall', 'UK', 'Non-UK / Unknown']
 CLF_PUBLIC_KEYS = ['n', 'share', 'positive_support', 'negative_support', 'prevalence',
@@ -157,34 +165,72 @@ REG_PUBLIC_KEYS = ['n', 'share', 'mae_gbp', 'rmse_gbp', 'r2', 'mean_error_gbp',
 CLF_PUBLIC_EXPECTED = {
     'Overall': [5225, 1., 2236, 2989, .4279, .3610, .7301, .6064, .1773, .7190, .6579, .7936, .7639],
     'UK': [4773, .9135, 2026, 2747, .4245, .3537, .7301, .5987, .1729, .7186, .6532, .7927, .7606],
+    'Non-UK / Unknown': [452, .0865, 210, 242, .4646, .4381, .7301, .6810, .2273, .7222, .7010, .8004, .7943],
 }
 REG_PUBLIC_EXPECTED = {
     'Overall': [5225, 1., 515.3416, 3144.9414, -.0276, 515.3416, 515.3416, 0., .5721],
     'UK': [4773, .9135, 467.8408, 2787.4855, -.0290, 467.8408, 467.8408, 0., .5755],
+    'Non-UK / Unknown': [452, .0865, 1016.9378, 5681.8507, -.0331, 1016.9378, 1016.9378, 0., .5354],
 }
 
 
 def publication_issues(representation, clf, reg):
-    """Check public table shapes, membership and available old reference rows."""
+    """Fail closed on any deviation from the accepted historical release.
+
+    All three rows are locked, including non-additive AUC/AP/R². Additive
+    statistics are also reconciled; rounded inputs carry half-unit tolerance.
+    """
     issues = []
     if (list(representation.index) != PUBLIC_GROUPS[1:]
+            or not representation.columns.is_unique
             or set(representation.columns) != set(PUBLIC_COUNTS)):
         issues.append('representation schema')
     else:
         for role, counts in PUBLIC_COUNTS.items():
             if not np.array_equal(representation[role].to_numpy(), counts):
                 issues.append(f'representation: {role}')
-    for label, table, keys, expected in [
-        ('classification publication', clf, CLF_PUBLIC_KEYS, CLF_PUBLIC_EXPECTED),
-        ('regression publication', reg, REG_PUBLIC_KEYS, REG_PUBLIC_EXPECTED),
-    ]:
-        if list(table.index) != PUBLIC_GROUPS or set(table.columns) != set(keys + ['status']):
+    tables = [('classification', clf, CLF_PUBLIC_KEYS, CLF_PUBLIC_EXPECTED),
+              ('regression', reg, REG_PUBLIC_KEYS, REG_PUBLIC_EXPECTED)]
+    for label, table, keys, expected in tables:
+        if (list(table.index) != PUBLIC_GROUPS or not table.columns.is_unique
+                or set(table.columns) != set(keys + ['status'])):
             issues.append(f'{label}: schema')
             continue
+        if not table.status.eq('descriptive').fillna(False).all():
+            issues.append(f'{label}: status')
         for group, values in expected.items():
             issues.extend(metric_issues(table.loc[group, keys].to_dict(),
                                         dict(zip(keys, values)), f'{label}: {group}'))
-        if table.loc[PUBLIC_GROUPS[2], 'n'] != 452 or not np.isfinite(
-                table.loc[PUBLIC_GROUPS[2], keys].to_numpy(dtype=float)).all():
-            issues.append(f'{label}: pooled group incomplete')
+    if issues:
+        return issues
+    tol = 5.00001e-5
+    def close(a, b, atol=tol):
+        return np.isclose(a, b, rtol=0, atol=atol)
+    confusion = []
+    for group in PUBLIC_GROUPS:
+        c, r = clf.loc[group], reg.loc[group]
+        n, pos, neg = int(c.n), int(c.positive_support), int(c.negative_support)
+        if (not all(0 <= c[k] <= 1 for k in CLF_PUBLIC_KEYS[1:] if k not in ('positive_support','negative_support'))
+                or not all(0 <= r[k] <= 1 for k in ['share','zero_share'])
+                or r.r2 > 1 or min(r.mae_gbp,r.rmse_gbp,r.mean_actual_gbp,r.mean_predicted_gbp) < 0
+                or r.rmse_gbp + tol < r.mae_gbp or abs(r.mean_error_gbp) > r.mae_gbp + tol
+                or pos + neg != n or r.n != n or not close(c.share,n/clf.loc['Overall','n'])
+                or not close(r.share,c.share) or not close(r.zero_share,neg/n)
+                or not close(r.mean_error_gbp,r.mean_actual_gbp-r.mean_predicted_gbp,3*tol)):
+            issues.append(f'{group}: domain or consistency')
+        tp, fp = round(c.recall*pos), round(c.fpr*neg)
+        sel = tp+fp
+        confusion.append(np.array([tp,fp,pos,neg]))
+        rates = dict(prevalence=pos/n,selection_rate=sel/n,accuracy=(tp+neg-fp)/n,
+                     recall=tp/pos,fpr=fp/neg,precision=tp/sel,f1=2*tp/(pos+sel))
+        if not all(close(c[k],v) for k,v in rates.items()):
+            issues.append(f'{group}: confusion metrics')
+    if not np.array_equal(confusion[0],confusion[1]+confusion[2]):
+        issues.append('classification: partition counts')
+    sub = reg.iloc[1:]; overall = reg.iloc[0]; weights = sub.n
+    for key in ['mae_gbp','mean_error_gbp','mean_actual_gbp','mean_predicted_gbp','zero_share']:
+        if not close(overall[key],np.average(sub[key],weights=weights),2*tol):
+            issues.append(f'regression: partition {key}')
+    if not close(overall.rmse_gbp,np.sqrt(np.average(sub.rmse_gbp**2,weights=weights)),2*tol):
+        issues.append('regression: partition RMSE')
     return issues

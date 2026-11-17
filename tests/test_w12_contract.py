@@ -49,8 +49,8 @@ def test_privacy_all_suppressed():
 
 
 def test_country_selection_unknown_and_small_lines():
-    t=country_selection(pd.DataFrame({'Known_ID':[1,12,0],'Missing_ID':[4,0,20]},index=pd.Index(['NULL','Unspecified','HK'],name='Country')))
-    assert t.loc['Unknown','total']==17 and t.loc['Unknown','missing_share']==pytest.approx(4/17)
+    t=country_selection(pd.DataFrame({'Known_ID':[1,32,0],'Missing_ID':[4,0,40]},index=pd.Index(['NULL','Unspecified','HK'],name='Country')))
+    assert t.loc['Unknown','total']==37 and t.loc['Unknown','missing_share']==pytest.approx(4/37)
     assert t.loc['HK','missing_share']==1
 
 
@@ -192,8 +192,6 @@ def test_publication_gate_requires_partition_and_reference_rows():
     representation = pd.DataFrame(fr.PUBLIC_COUNTS,index=fr.PUBLIC_GROUPS[1:])
     def make_table(expected, keys):
         table = pd.DataFrame.from_dict(expected,orient='index',columns=keys)
-        table.loc['Non-UK / Unknown'] = 1.
-        table.loc['Non-UK / Unknown','n'] = 452
         table['status'] = 'descriptive'
         return table
     c = make_table(fr.CLF_PUBLIC_EXPECTED,fr.CLF_PUBLIC_KEYS)
